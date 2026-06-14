@@ -9,11 +9,13 @@
     "./judge": "./src/judge.mjs"
   },
   "bin": {
-    "warden": "./src/cli.mjs"
+    "warden": "./src/cli.mjs",
+    "warden-mcp": "./src/mcp-proxy-cli.mjs"
   },
   "scripts": {
     "test": "node --test",
-    "demo": "node demo/demo.mjs"
+    "demo": "node demo/demo.mjs",
+    "smoke": "node demo/mcp-smoke.mjs"
   },
   "keywords": ["agent", "security", "mcp", "llm", "guardrails", "ai-safety", "firewall", "own-your-stack"],
   "author": "Thomas Sprayberry",

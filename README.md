@@ -49,6 +49,16 @@ server.setHandler(guardHandler(realHandler, policy, {
 }));
 ```
 
+## MCP stdio proxy (drop-in)
+
+Wrap **any** MCP server with the firewall — no code changes to client or server:
+
+```bash
+warden-mcp --policy warden.config.json -- npx -y @modelcontextprotocol/server-filesystem /workspace
+```
+
+Point your MCP client (Claude Code, Claude Desktop, …) at `warden-mcp` instead of the server directly. Every `tools/call` is firewalled before it reaches the server; **poisoned tools are stripped from `tools/list` before the client ever sees them**; blocks come back as normal tool errors the model can read. Flags: `--allow-approve` (downgrade approval-tier to allow), `--no-strip` (warn instead of strip), `--audit <file>` (hash-chained log).
+
 ## Optional LLM judge
 
 ```js
