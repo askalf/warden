@@ -1,0 +1,6 @@
+{
+  "allow": ["shell(npm run test:*)", "shell(git status*)"],
+  "deny": ["shell(sudo*)", "shell(rm:*)"],
+  "egressAllow": ["api.anthropic.com", "github.com", "api.github.com"],
+  "writeRoots": ["src/", "docs/"]
+}

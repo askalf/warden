@@ -1,0 +1,91 @@
+// warden — own your agent security. A guard between an agent and its tools.
+import { TIER, ORDER, worst, classify, NET, WRITE } from './classify.mjs';
+import { scanSecrets, scanInjection, isExternal } from './scan.mjs';
+import { matchRule, DEFAULT_POLICY, loadPolicy } from './policy.mjs';
+import { AuditLog } from './audit.mjs';
+
+export { TIER, AuditLog, classify, loadPolicy, matchRule };
+
+/** Deterministic verdict for an action. No I/O, no LLM — pure + offline. */
+export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
+  const { allow = [], deny = [], egressAllow = [], writeRoots = null } = policy;
+  const tool = (action.tool || '').toLowerCase();
+  const base = classify(action);
+  const secrets = scanSecrets(action);
+  const injection = scanInjection(action, skillText);
+  let tier = base.tier;
+  const why = [...base.why];
+
+  const externalHosts = secrets.hosts.filter((h) => isExternal(h, egressAllow));
+
+  if (secrets.hasSecret && externalHosts.length) {
+    tier = TIER.BLACK;
+    why.push('☠ EXFIL: ' + secrets.flags.join('; ') + ' → external ' + externalHosts.join(','));
+  } else if (secrets.hasSecret) {
+    tier = worst(tier, TIER.RED);
+    why.push(...secrets.flags.map((f) => '⚠ ' + f));
+  }
+  if (injection.length) {
+    tier = TIER.BLACK;
+    why.push(...injection.map((f) => '☠ injection/poisoned-skill: ' + f));
+  }
+  if (NET.includes(tool) && externalHosts.length && egressAllow.length) {
+    tier = worst(tier, TIER.RED);
+    why.push('⚠ egress to non-allowlisted host(s): ' + externalHosts.join(','));
+  }
+  if (writeRoots && WRITE.includes(tool)) {
+    const p = action.input?.path || '';
+    if (p && !writeRoots.some((r) => p.startsWith(r))) {
+      tier = worst(tier, TIER.RED);
+      why.push('⚠ write outside allowed roots: ' + p);
+    }
+  }
+
+  const denied = deny.find((r) => matchRule(r, action));
+  const allowed = allow.find((r) => matchRule(r, action));
+
+  let decision;
+  if (denied) { decision = 'block'; why.push('✗ denied by rule: ' + denied); }
+  else if (tier === TIER.BLACK) decision = 'block';
+  else if (allowed) { decision = 'allow'; why.push('✓ pre-approved by rule: ' + allowed); }
+  else if (tier === TIER.RED) decision = 'approve';
+  else decision = 'allow';
+
+  return { tool: action.tool, tier, decision, why, externalHosts, gray: decision === 'approve' || tier === TIER.YELLOW };
+}
+
+const recordVerdict = (audit, action, v) =>
+  audit && audit.record({ ts: new Date().toISOString(), tool: action.tool, input: action.input, tier: v.tier, decision: v.decision, why: v.why });
+
+/** Sync deterministic check (optionally records to an AuditLog). */
+export function check(action, policy = DEFAULT_POLICY, { audit = null, skillText = '' } = {}) {
+  const v = decide(action, policy, skillText);
+  recordVerdict(audit, action, v);
+  return v;
+}
+
+/**
+ * Async check that consults an optional LLM judge for gray-zone actions.
+ * The judge can only ESCALATE risk — a deterministic BLACK is final, and the
+ * judge is never asked to bless something the rules already blocked.
+ */
+export async function checkAsync(action, policy = DEFAULT_POLICY, { audit = null, skillText = '', judge = null } = {}) {
+  const v = decide(action, policy, skillText);
+  if (judge && v.decision !== 'block' && v.gray) {
+    try {
+      const j = await judge(action, v);
+      if (j && j.tier && ORDER[j.tier] > ORDER[v.tier]) {
+        v.tier = j.tier;
+        v.why.push(`🧠 judge escalated → ${j.tier}: ${j.reason || 'unspecified'}`);
+        if (j.tier === TIER.BLACK) v.decision = 'block';
+        else if (j.tier === TIER.RED && v.decision === 'allow') v.decision = 'approve';
+      } else if (j && j.reason) {
+        v.why.push(`🧠 judge: ${j.reason}`);
+      }
+    } catch (e) {
+      v.why.push('🧠 judge unavailable (fail-safe: kept deterministic verdict)');
+    }
+  }
+  recordVerdict(audit, action, v);
+  return v;
+}
