@@ -10,7 +10,8 @@
   },
   "bin": {
     "warden": "./src/cli.mjs",
-    "warden-mcp": "./src/mcp-proxy-cli.mjs"
+    "warden-mcp": "./src/mcp-proxy-cli.mjs",
+    "warden-hook": "./src/cc-hook.mjs"
   },
   "scripts": {
     "test": "node --test",
