@@ -1,10 +1,23 @@
 // Detection benchmark — run the corpus through warden, report catch-rate and
 // false-positive rate overall AND per family, then list every miss / false
 // positive / under-gate so the gaps are an actionable backlog.
-import { check } from '../src/index.mjs';
+import { check, checkAsync } from '../src/index.mjs';
+import { makeJudge } from '../src/judge.mjs';
 import { SAMPLES } from './corpus.mjs';
 
 const policy = { egressAllow: ['api.example.com'], writeRoots: ['src/', 'docs/'] };
+
+// `--judge` consults the LLM judge for gray-zone samples (incl. the obfuscation
+// router's evasion cases). Endpoint defaults to dario; override via env.
+const useJudge = process.argv.includes('--judge');
+const judge = useJudge
+  ? makeJudge({
+      endpoint: process.env.WARDEN_JUDGE_ENDPOINT || 'http://localhost:3456',
+      model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-4-6',
+      apiKey: process.env.WARDEN_JUDGE_KEY || process.env.DARIO_API_KEY || 'dario',
+    })
+  : null;
+const verdict = (s) => (judge ? checkAsync(s.action, policy, { skillText: s.skill || '', judge }) : check(s.action, policy, { skillText: s.skill || '' }));
 const C = { r: '\x1b[31m', g: '\x1b[32m', y: '\x1b[33m', d: '\x1b[2m', x: '\x1b[0m', b: '\x1b[1m' };
 
 const miss = [];  // malicious not blocked
@@ -15,7 +28,7 @@ const fam = new Map(); // family -> { malTot, malHit, benTot, benOk, riskTot, ri
 const F = (k) => { if (!fam.has(k)) fam.set(k, { malTot: 0, malHit: 0, benTot: 0, benOk: 0, riskTot: 0, riskOk: 0 }); return fam.get(k); };
 
 for (const s of SAMPLES) {
-  const v = check(s.action, policy, { skillText: s.skill || '' });
+  const v = await verdict(s);
   const f = F(s.family || 'misc');
   if (s.expect === 'block') {
     f.malTot++;
@@ -34,7 +47,7 @@ const ben = SAMPLES.filter((s) => s.expect === 'allow');
 const risk = SAMPLES.filter((s) => s.expect === 'approve');
 const pct = (n, d) => (d ? (100 * n / d).toFixed(0) : '—');
 
-console.log(`\n${C.b}warden detection bench${C.x}  (${SAMPLES.length} samples · ${fam.size} families)\n`);
+console.log(`\n${C.b}warden detection bench${C.x}  (${SAMPLES.length} samples · ${fam.size} families${useJudge ? ' · ' + C.y + 'judge ON' + C.x : ''})\n`);
 console.log(`${C.g}detection${C.x}:      ${mal.length - miss.length}/${mal.length} malicious blocked   (${pct(mal.length - miss.length, mal.length)}% recall)`);
 console.log(`${C.r}false-positive${C.x}: ${fp.length}/${ben.length} benign over-flagged   (${pct(ben.length - fp.length, ben.length)}% precision)`);
 console.log(`${C.y}under-gated${C.x}:    ${soft.length}/${risk.length} risky slipped to allow`);

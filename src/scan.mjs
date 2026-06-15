@@ -48,3 +48,23 @@ export function injectionHits(text = '') {
 export function scanInjection(action, skillText = '') {
   return injectionHits(JSON.stringify(action.input || {}) + ' ' + skillText);
 }
+
+// Obfuscation / evasion *smells* — NOT detections. Regex can't safely decide
+// whether `X=rm;$X -rf /` or `rm${IFS}-rf${IFS}/` is malicious (deobfuscating
+// arbitrary shell is undecidable by pattern), so a command matching these is
+// classified normally by the deterministic gate but flagged GRAY so the LLM
+// judge (which CAN deobfuscate) gets a look. Liberal by design: a false smell
+// costs one judge call that returns benign — never a false block.
+export const OBFUSCATION_RE = [
+  { re: /\$\{?IFS\}?/, why: 'IFS word-splitting (anti-detection)' },
+  { re: /\$\w+\$\w+/, why: 'concatenated variables as a command' },
+  { re: /\|\s*\$\{?\w+\}?(?:\s|$)/, why: 'pipes into a variable-named command' },
+  { re: /\b\w{1,4}=[^;\s|]{1,16}\s*;[^;]{0,40}\$\{?\w/, why: 'assigns then invokes via a variable' },
+  { re: /\bxxd\s+-r\b|\b(?:base32|openssl\s+enc)\b[^|]*\|\s*(?:ba)?sh\b/i, why: 'decodes then pipes to a shell' },
+  { re: /\beval\b/i, why: 'eval of dynamic content' },
+  { re: /(?:\\x[0-9a-f]{2}){3,}/i, why: 'hex-escaped payload' },
+];
+
+export function obfuscationHits(text = '') {
+  return OBFUSCATION_RE.filter((p) => p.re.test(text)).map((p) => p.why);
+}

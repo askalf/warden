@@ -1,6 +1,6 @@
 // warden — own your agent security. A guard between an agent and its tools.
 import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
-import { scanSecrets, injectionHits, isExternal, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
+import { scanSecrets, injectionHits, obfuscationHits, isExternal, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
 import { matchRule, DEFAULT_POLICY, loadPolicy } from './policy.mjs';
 import { AuditLog } from './audit.mjs';
 
@@ -49,6 +49,16 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
     }
   }
 
+  // obfuscation router: a command that *smells* evasive but classified clean is
+  // routed to the judge (marked gray) WITHOUT changing the deterministic verdict
+  // — so with no judge configured it still allows (no false block), and with a
+  // judge it gets deobfuscated. This is how the evasion bucket reaches the judge.
+  let smells = [];
+  if (SHELL.includes(tool) && tier !== TIER.BLACK) {
+    smells = obfuscationHits(action.input?.command || action.input?.cmd || '');
+    if (smells.length) why.push(...smells.map((f) => '· obfuscation smell → judge: ' + f));
+  }
+
   const denied = deny.find((r) => matchRule(r, action));
   const allowed = allow.find((r) => matchRule(r, action));
 
@@ -59,7 +69,7 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   else if (tier === TIER.RED) decision = 'approve';
   else decision = 'allow';
 
-  return { tool: action.tool, tier, decision, why, externalHosts, gray: decision === 'approve' || tier === TIER.YELLOW };
+  return { tool: action.tool, tier, decision, why, externalHosts, gray: decision === 'approve' || tier === TIER.YELLOW || smells.length > 0 };
 }
 
 const recordVerdict = (audit, action, v) =>
