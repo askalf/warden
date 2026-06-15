@@ -9,7 +9,7 @@ export const WRITE = ['write', 'edit', 'create', 'append', 'notebookedit'];
 export const READONLY = ['read', 'get', 'list', 'ls', 'grep', 'glob', 'status', 'stat'];
 
 export const BLACK_SHELL = [
-  { re: /\brm\s+-[a-z]*r[a-z]*f?\b[^|]*?(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|\s\$HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete of root/home/system/glob' },
+  { re: /\brm\s+-[a-z]*r[a-z]*f?\b[^|]*?(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete of root/home/system/glob' },
   { re: /\bmkfs(\.\w+)?\b/i, why: 'format filesystem' },
   { re: /\bdd\b[^|]*\bof=\/dev\/(sd|nvme|disk)/i, why: 'raw disk overwrite' },
   { re: /:\(\)\s*\{\s*:\s*\|\s*:?\s*&\s*\}\s*;\s*:/, why: 'fork bomb' },
@@ -17,26 +17,75 @@ export const BLACK_SHELL = [
   { re: /\bchmod\s+-R\s+0?777\s+\//i, why: 'world-writable root' },
   { re: /\bhistory\s+-c\b|\bunset\s+HISTFILE\b|rm\s+[^|]*\.bash_history/i, why: 'covering tracks (history wipe)' },
   { re: /\/dev\/tcp\//i, why: 'reverse shell (/dev/tcp)' },
-  { re: /\bnc\b[^|]*\s-[a-z]*e\b/i, why: 'netcat exec (reverse shell)' },
+  { re: /\bn(?:c|cat)\b[^|]*\s-[a-z]*e\b/i, why: 'netcat exec (reverse shell)' },
   { re: /\beval\b[^|]*\$\(\s*(?:curl|wget)\b/i, why: 'eval of remote download (RCE)' },
   { re: /\bbase64\b[^|]*(?:-d|--decode)[^|]*\|\s*(?:ba)?sh\b/i, why: 'base64-decode piped to shell (obfuscated RCE)' },
-  { re: /\b(?:python[0-9.]*|perl|ruby|php)\b\s+-[ce]\b(?=[^|]*\b(?:socket|fsockopen)\b)(?=[^|]*\b(?:connect|subprocess|exec|system|pty|\/bin\/(?:ba)?sh)\b)/i, why: 'interpreter reverse shell' },
+  { re: /\b(?:python[0-9.]*|perl|ruby|php|node)\b(?=[^|]*\b(?:socket|fsockopen|IO::Socket|Socket::INET)\b)(?=[^|]*\b(?:connect|PeerAddr|exec|system|subprocess|popen|fdopen|spawn|\/bin\/(?:ba)?sh)\b)/i, why: 'interpreter reverse shell' },
   { re: /\b(?:iptables\s+-F|ufw\s+disable|setenforce\s+0)\b/i, why: 'disables host firewall/SELinux' },
   { re: /(?:Set|Add)-MpPreference[^|]*-(?:Disable\w+|ExclusionPath)/i, why: 'disables/evades Microsoft Defender' },
   { re: /\|\s*crontab\b/i, why: 'installs a crontab (persistence)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\becho\b|install)[^|]*authorized_keys/i, why: 'writes an SSH backdoor (authorized_keys)' },
-  { re: /(?:>>?|tee\b|\bcp\b|\bmv\b)[^|]*[\\/]etc[\\/](?:cron|systemd)/i, why: 'writes a persistence unit (cron/systemd)' },
+  { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\binstall\b|\becho\b)[^|]*[\\/]etc[\\/](?:cron|systemd|ld\.so\.preload|sudoers|rc\.local|init\.d|profile\.d)/i, why: 'writes a persistence/escalation file (cron/systemd/sudoers/ld.so.preload)' },
   { re: /\b(?:tar|cat|cp|zip|gzip|dd)\b[^|]*(?:\.ssh|id_rsa|id_ed25519|\.aws|\.env\b|authorized_keys|credentials)[^|]*\|\s*(?:nc|ncat|curl|wget|socat)\b/i, why: 'pipe sensitive files to the network (exfil)' },
-  { re: /\b(?:scp|rsync)\b(?:\s+-\w+\s+\S+|\s+-\w+)*\s+\S*(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem\b|\.ppk\b|\.aws[\\/]credentials|\.env\b)\S*\s+\S*@\S+:/i, why: 'exfiltrate a key/credential via scp/rsync' },
+  { re: /\b(?:scp|rsync)\b(?:\s+-\w+\s+\S+|\s+-\w+)*\s+\S*(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem\b|\.ppk\b|\.aws[\\/]credentials|\.env\b|[\\/]\.ssh\b|[\\/]\.gnupg\b)\S*\s+\S*@\S+:/i, why: 'exfiltrate a key/credential via scp/rsync' },
+  { re: /\bcurl\b[^|]*\s-(?:F|T|d|-form|-upload-file|-data(?:-binary)?)\b[^|]*(?:@?\/etc\/(?:passwd|shadow)|id_rsa|id_ed25519|[\\/]\.ssh[\\/]|\.aws[\\/]credentials|\.env\b|\.pem\b)/i, why: 'uploads a sensitive file via curl (exfil)' },
+  { re: /\bwget\b[^|]*--post-file=[^|]*(?:\/etc\/(?:passwd|shadow)|id_rsa|[\\/]\.ssh[\\/]|\.aws[\\/]credentials|\.env\b|credentials)/i, why: 'uploads a sensitive file via wget (exfil)' },
   { re: /\breg\s+add\b[^|]*(?:CurrentVersion[\\/]+Run|Image\s+File\s+Execution)/i, why: 'registry Run-key persistence' },
   { re: /\bpowershell(?:\.exe)?\b[^|]*\s-e(?:c|nc|ncodedcommand)?\b\s+[A-Za-z0-9+/=]{16,}/i, why: 'powershell encoded command (obfuscation)' },
   { re: /\b(?:IEX|Invoke-Expression|iwr|irm)\b[^|]*(?:DownloadString|DownloadFile|Net\.WebClient|Invoke-WebRequest|https?:)/i, why: 'powershell download-cradle (RCE)' },
   { re: /\bvssadmin\b[^|]*\bdelete\b[^|]*shadow/i, why: 'deletes volume shadow copies (ransomware)' },
   { re: /\bnet\s+localgroup\s+admin\w*\b[^|]*\/add/i, why: 'adds a backdoor admin account' },
   { re: /\bdocker\s+run\b[^|]*-v\s+\/:(?:\/|\s|$)/i, why: 'mounts host root into container (escape)' },
-  { re: /\bnsenter\b[^|]*--target\s+1\b/i, why: 'namespace escape to host (nsenter)' },
+  { re: /\bnsenter\b[^|]*(?:--target|-t)\s*1\b/i, why: 'namespace escape to host (nsenter)' },
   { re: /\b(?:env|printenv|set)\b\s*\|\s*(?:curl|wget|nc|ncat)\b/i, why: 'pipes environment to the network (exfil)' },
   { re: /\b(?:nslookup|dig|host)\b[^|]*\$\([^)]*(?:cat|base64|whoami|hostname|env|printenv)/i, why: 'DNS exfiltration' },
+
+  // --- download-and-execute LOLBins (Windows). Scoped so read-only uses
+  //     (certutil -hashfile, reg query, sc query) do NOT match. ---
+  { re: /\bcertutil(?:\.exe)?\b[^|]*(?:-urlcache|-urlfetch|https?:\/\/)/i, why: 'certutil remote download (LOLBin)' },
+  { re: /\bbitsadmin(?:\.exe)?\b[^|]*\/transfer\b/i, why: 'bitsadmin download (LOLBin)' },
+  { re: /\bmshta(?:\.exe)?\b[^|]*(?:https?:|javascript:|vbscript:)/i, why: 'mshta remote/script exec (LOLBin)' },
+  { re: /\bregsvr32(?:\.exe)?\b[^|]*(?:\/i:\s*https?:|scrobj\.dll)/i, why: 'regsvr32 scriptlet exec (LOLBin)' },
+  { re: /\bmsiexec(?:\.exe)?\b[^|]*\/i\b[^|]*https?:/i, why: 'msiexec remote package (LOLBin)' },
+  { re: /\bwmic\b[^|]*\bprocess\b[^|]*\bcall\s+create\b/i, why: 'WMI process creation (exec)' },
+  // --- download-and-execute (Unix). Process substitution / sh -c that a shell
+  //     actually executes; `diff <(curl a) <(curl b)` (no sh/source) won't match. ---
+  { re: /(?:\b(?:ba)?sh\b|\bsource\b|(?:^|[;&|])\s*\.)\s*[^|]*<\(\s*(?:curl|wget)\b/i, why: 'process-substitution remote exec (RCE)' },
+  { re: /\b(?:ba)?sh\b\s+-c\b[^|]*\$\(\s*(?:curl|wget)\b/i, why: 'sh -c of remote download (RCE)' },
+  { re: /\bpython[0-9.]*\b\s+-c\b(?=[^|]*\b(?:urlopen|urlretrieve|requests\.get)\b)(?=[^|]*\b(?:exec|eval|os\.system|subprocess|popen)\b)/i, why: 'python download-and-exec (RCE)' },
+  // --- reverse shells (more) ---
+  { re: /\bsocat\b[^|]*\bEXEC:/i, why: 'socat reverse shell (EXEC)' },
+  { re: /\bmkfifo\b[\s\S]*\|\s*n(?:c|cat)\b/i, why: 'named-pipe reverse shell (mkfifo|nc)' },
+  // --- credential dumping (Windows) ---
+  { re: /\breg(?:\.exe)?\s+save\b[^|]*\bHK(?:LM|EY_LOCAL_MACHINE)\\(?:SAM|SECURITY|SYSTEM)\b/i, why: 'dumps SAM/SECURITY hive (credential theft)' },
+  { re: /\bcomsvcs\.dll\b.{0,40}\bMiniDump\b|\bprocdump(?:64|\.exe)?\b[^|]*\blsass\b|\bMiniDumpWriteDump\b/i, why: 'LSASS memory dump (credential theft)' },
+  // --- Windows persistence (autorun). The shell-side of the Startup/Run gap;
+  //     read-only forms (reg query Run, schtasks /query, Get-ScheduledTask,
+  //     Copy-Item to non-Startup) are excluded by requiring a write verb + target. ---
+  { re: /(?:New-ItemProperty|Set-ItemProperty)\b[^|]*CurrentVersion[\\/]+Run\b/i, why: 'registry Run-key persistence (cmdlet)' },
+  { re: /(?:Copy-Item|Move-Item|Set-Content|Add-Content|Out-File|New-Item|Tee-Object|\bcp\b|\bmv\b|>>?)[^|]*(?:GetFolderPath\(\s*['"]?Startup|[\\/]Startup[\\/])/i, why: 'writes to the Startup folder (persistence)' },
+  { re: /\bschtasks(?:\.exe)?\b[^|]*\/create\b/i, why: 'creates a scheduled task (persistence)' },
+  { re: /\bRegister-ScheduledTask\b/i, why: 'registers a scheduled task (persistence)' },
+  { re: /\bsc(?:\.exe)?\s+create\b|\bNew-Service\b/i, why: 'creates a service (persistence)' },
+  // --- security disable (more) ---
+  { re: /\bsc(?:\.exe)?\s+(?:stop|delete|config)\s+(?:WinDefend|Sense|MsMpSvc|WdNisSvc)\b/i, why: 'stops Microsoft Defender service' },
+  { re: /\bwevtutil\s+(?:cl|clear-log)\b|\bClear-EventLog\b|\bRemove-EventLog\b/i, why: 'clears Windows event logs (anti-forensics)' },
+  { re: /\bauditctl\s+-D\b|\bsystemctl\s+(?:stop|disable|mask)\s+(?:auditd|rsyslog|syslog)\b/i, why: 'disables host audit/logging' },
+  { re: /\bbcdedit\b[^|]*(?:recoveryenabled\s+no|bootstatuspolicy\s+ignoreallfailures)/i, why: 'disables Windows recovery (ransomware)' },
+  // --- obfuscated/hidden powershell (hidden window + bypass/encoded together) ---
+  { re: /\bpowershell(?:\.exe)?\b(?=[^|]*-w(?:indowstyle)?\s+hidden\b)(?=[^|]*(?:-(?:ep|executionpolicy)\s+bypass\b|-e(?:c|nc|ncodedcommand)?\s))/i, why: 'hidden + bypass/encoded powershell (obfuscation)' },
+  // --- container escape (more) ---
+  { re: /\bdocker\s+run\b[^|]*-v\s+\/var\/run\/docker\.sock/i, why: 'mounts the docker socket (escape)' },
+  { re: /\bdocker\s+run\b(?=[^|]*--pid[= ]host\b)(?=[^|]*--privileged\b)/i, why: 'privileged host-pid container (escape)' },
+  // --- destructive (more). Drive-root / system targets only; `Remove-Item
+  //     node_modules`, `find /tmp -delete`, `> /dev/null` stay clean. ---
+  { re: /\brm\b(?=[^|]*--recursive\b)(?=[^|]*--force\b)[^|]*(?:\s[/~](?:\s|$)|--no-preserve-root|["'\s]\$\{?HOME\b)/i, why: 'recursive force-delete (long flags) of root/home' },
+  { re: /\bfind\s+\/\s+[^|]*-delete\b/i, why: 'find / -delete (mass deletion)' },
+  { re: />\s*\/dev\/(?:sd|nvme|hd|disk|vd)[a-z]*\d*\b/i, why: 'overwrites a raw block device' },
+  { re: /\bshred\b\s+(?:-\S+\s+)*[\\/](?:etc|boot|dev|var|usr|home|root)\b/i, why: 'shreds a system file' },
+  { re: /\bcipher\b[^|]*\/w:/i, why: 'cipher secure-wipe' },
+  { re: /\bRemove-Item\b(?=[^|]*-Recurse\b)(?=[^|]*-Force\b)[^|]*[A-Za-z]:\\(?:[\s"']|$|Windows|Program|Users\b)/i, why: 'recursive force-delete of a Windows drive/system root' },
+  { re: /\bFormat-Volume\b|\bformat\s+[A-Za-z]:\s/i, why: 'formats a volume' },
 ];
 export const RED_SHELL = [
   { re: /\bsudo\b/i, why: 'privilege escalation' },
@@ -51,7 +100,7 @@ export const RED_SHELL = [
   { re: /\bdocker\s+run\b[^|]*--(?:privileged|pid[= ]host|net[= ]host|cap-add[= ]?SYS_ADMIN)/i, why: 'privileged / host-namespace container' },
   { re: /\bmount\b\s+\/dev\//i, why: 'mounts a block device' },
   { re: /\bnet\s+user\b[^|]*\/add/i, why: 'creates a user account' },
-  { re: /\bwmic\b[^|]*process[^|]*call\s+create|\bInvoke-WmiMethod\b/i, why: 'WMI process creation' },
+  { re: /\bInvoke-WmiMethod\b/i, why: 'WMI method invocation' },
 ];
 export const YELLOW_SHELL = [
   { re: /\b(mkdir|touch|mv|cp)\b/i, why: 'reversible filesystem change' },
