@@ -1,17 +1,16 @@
 #!/usr/bin/env node
-// warden as a Claude Code PreToolUse hook. Reads the hook payload on stdin,
-// firewalls the tool call, and returns a permission decision.
+// warden as a Claude Code PreToolUse hook.
+// Fast path: ask the warden daemon (shared classifier + audit). Fallback: run an
+// in-process check if the daemon isn't running. Fail-open: any error -> defer,
+// so a warden bug never bricks your tooling.
 //
-// Posture (daily-driver safe):
-//   black (RCE / exfil / poisoned-skill / deny-rule) -> deny
-//   approve-tier -> ask ONLY in strict mode (policy.strict or WARDEN_STRICT=1)
-//   everything else -> defer (let Claude Code's normal flow proceed)
-// Fail-open: any error -> defer, so a warden bug never bricks your tooling.
+// Posture: black -> deny; approve-tier -> ask only in strict mode; else defer.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { check, loadPolicy } from './index.mjs';
+import { loadPolicy } from './policy.mjs';
+import { daemonCheck } from './client.mjs';
 
 /** Map a Claude Code tool_name + tool_input to a warden action. */
 export function ccToAction(toolName, ti = {}) {
@@ -28,13 +27,11 @@ export function ccToAction(toolName, ti = {}) {
   return { tool: t || 'unknown', input: ti };
 }
 
-/** Pure decision: { kind: 'defer'|'deny'|'ask', tier, reason, verdict }. */
-export function hookDecision(payload, policy) {
-  const action = ccToAction(payload.tool_name, payload.tool_input || {});
-  const v = check(action, policy);
-  if (v.decision === 'block') return { kind: 'deny', tier: v.tier, reason: `⛔ warden blocked (${v.tier}): ${v.why.join('; ')}`, verdict: v };
-  if (v.decision === 'approve' && policy.strict) return { kind: 'ask', tier: v.tier, reason: `warden flagged (${v.tier}): ${v.why.join('; ')}`, verdict: v };
-  return { kind: 'defer', tier: v.tier, verdict: v };
+/** Map a warden verdict to a Claude Code hook decision. */
+export function verdictToHook(verdict, strict) {
+  if (verdict.decision === 'block') return { kind: 'deny', reason: `⛔ warden blocked (${verdict.tier}): ${verdict.why.join('; ')}` };
+  if (verdict.decision === 'approve' && strict) return { kind: 'ask', reason: `warden flagged (${verdict.tier}): ${verdict.why.join('; ')}` };
+  return { kind: 'defer' };
 }
 
 const out = (permissionDecision, reason) =>
@@ -46,7 +43,7 @@ function readStdin() {
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (c) => (d += c));
     process.stdin.on('end', () => res(d));
-    setTimeout(() => res(d), 2500); // safety: never hang the tool call
+    setTimeout(() => res(d), 2500);
   });
 }
 
@@ -58,15 +55,20 @@ async function main() {
   try { payload = JSON.parse((await readStdin()) || '{}'); } catch { process.exit(0); } // fail-open
   try {
     const policy = loadPolicy(CFG);
-    policy.strict = policy.strict || !!process.env.WARDEN_STRICT;
-    const d = hookDecision(payload, policy);
-    try { fs.mkdirSync(path.dirname(AUDIT), { recursive: true }); fs.appendFileSync(AUDIT, JSON.stringify({ ts: new Date().toISOString(), tool: payload.tool_name, tier: d.tier, kind: d.kind, why: d.verdict.why }) + '\n'); } catch {}
+    const strict = policy.strict || !!process.env.WARDEN_STRICT;
+    const action = ccToAction(payload.tool_name, payload.tool_input || {});
+    let v = await daemonCheck({ action, skillText: '' });   // fast path (daemon also audits)
+    const auditedByDaemon = !!v;
+    if (!v) { const { check } = await import('./index.mjs'); v = check(action, policy, {}); } // fallback
+    if (!auditedByDaemon) {
+      try { fs.mkdirSync(path.dirname(AUDIT), { recursive: true }); fs.appendFileSync(AUDIT, JSON.stringify({ ts: new Date().toISOString(), tool: payload.tool_name, tier: v.tier, decision: v.decision, why: v.why }) + '\n'); } catch {}
+    }
+    const d = verdictToHook(v, strict);
     if (d.kind === 'deny') out('deny', d.reason);
     else if (d.kind === 'ask') out('ask', d.reason);
-    // defer: no output
     process.exit(0);
   } catch (e) {
-    process.stderr.write('warden-hook error (fail-open): ' + (e?.message || e) + '\n');
+    process.stderr.write('warden-hook error (fail-open): ' + (e && e.message || e) + '\n');
     process.exit(0); // fail-open
   }
 }

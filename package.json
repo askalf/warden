@@ -7,12 +7,15 @@
     ".": "./src/index.mjs",
     "./mcp": "./src/mcp.mjs",
     "./judge": "./src/judge.mjs",
-    "./wrap": "./src/wrap.mjs"
+    "./wrap": "./src/wrap.mjs",
+    "./daemon": "./src/daemon.mjs",
+    "./client": "./src/client.mjs"
   },
   "bin": {
     "warden": "./src/cli.mjs",
     "warden-mcp": "./src/mcp-proxy-cli.mjs",
-    "warden-hook": "./src/cc-hook.mjs"
+    "warden-hook": "./src/cc-hook.mjs",
+    "warden-serve": "./src/daemon-cli.mjs"
   },
   "scripts": {
     "test": "node --test",
