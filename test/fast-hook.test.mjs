@@ -79,3 +79,21 @@ test('fast-hook: strict policy gates approve-tier as ask', async () => {
     try { fs.unlinkSync(cfg); } catch {}
   }
 });
+
+test('daemon forwards the judge to checkAsync (evasion gray -> judge -> block)', async () => {
+  // Guards the daemon-level wiring: startDaemon must pass `judge` INTO checkAsync,
+  // not just branch on it. A green+gray evasion request must come back blocked.
+  const judge = async () => ({ tier: 'black', reason: 'deobfuscated to rm -rf /' });
+  const infoFile = tmp('infoj') + '.json';
+  const d = startDaemon({ socketPath: sockPath('j'), configPath: null, tcp: true, judge, infoFile });
+  await new Promise((r) => setTimeout(r, 150));
+  try {
+    const port = d.address().port;
+    const line = await tcpHook(port, { action: { tool: 'shell', input: { command: 'X=rm; $X -rf /' } } });
+    const v = JSON.parse(line);
+    assert.equal(v.decision, 'block');
+    assert.equal(v.tier, 'black');
+  } finally {
+    await new Promise((r) => d.close(r));
+  }
+});

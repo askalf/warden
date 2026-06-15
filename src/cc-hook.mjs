@@ -57,7 +57,10 @@ async function main() {
     const policy = loadPolicy(CFG);
     const strict = policy.strict || !!process.env.WARDEN_STRICT;
     const action = ccToAction(payload.tool_name, payload.tool_input || {});
-    let v = await daemonCheck({ action, skillText: '' });   // fast path (daemon also audits)
+    // Long read timeout: a daemon with the judge tier may think for seconds on a
+    // gray command. Connect still fails fast (daemon down -> in-process fallback).
+    const readMs = Number(process.env.WARDEN_READ_MS) || 15000;
+    let v = await daemonCheck({ action, skillText: '' }, { timeoutMs: readMs }); // fast path (daemon also audits)
     const auditedByDaemon = !!v;
     if (!v) { const { check } = await import('./index.mjs'); v = check(action, policy, {}); } // fallback
     if (!auditedByDaemon) {

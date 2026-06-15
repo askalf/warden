@@ -63,7 +63,7 @@ export function startDaemon({
 
         try {
           const v = judge
-            ? await checkAsync(action, policy, { audit, skillText: req.skillText || '' })
+            ? await checkAsync(action, policy, { audit, skillText: req.skillText || '', judge })
             : check(action, policy, { audit, skillText: req.skillText || '' });
           served++;
           if (auditPath) {

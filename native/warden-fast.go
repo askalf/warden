@@ -29,7 +29,20 @@ import (
 	"time"
 )
 
+// Dial fails fast (daemon down -> fall back quickly). The read deadline is much
+// longer because a daemon with the LLM judge tier enabled may take a couple
+// seconds to answer a gray-zone command — we must WAIT for that verdict, not
+// time out and fall back to the no-judge path. Override with WARDEN_READ_MS.
 const dialTimeout = 1500 * time.Millisecond
+
+func readTimeout() time.Duration {
+	if v := os.Getenv("WARDEN_READ_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Millisecond
+		}
+	}
+	return 12 * time.Second
+}
 
 // Same discovery file the daemon writes (see src/client.mjs wardenInfoFile).
 func infoPath() string {
@@ -63,7 +76,7 @@ func tryDaemon(payload []byte) (out []byte, ok bool) {
 		return nil, false
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
+	_ = conn.SetDeadline(time.Now().Add(readTimeout())) // long: judge may think for seconds
 	if _, err := conn.Write(append(payload, '\n')); err != nil {
 		return nil, false
 	}
