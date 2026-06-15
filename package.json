@@ -9,7 +9,9 @@
     "./judge": "./src/judge.mjs",
     "./wrap": "./src/wrap.mjs",
     "./daemon": "./src/daemon.mjs",
-    "./client": "./src/client.mjs"
+    "./client": "./src/client.mjs",
+    "./audit": "./src/audit.mjs",
+    "./scan": "./src/scan.mjs"
   },
   "bin": {
     "warden": "./src/cli.mjs",
