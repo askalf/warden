@@ -81,7 +81,7 @@ try {
     const sock = net.connect(PORT, '127.0.0.1');
     let buf = '';
     const to = setTimeout(() => { sock.destroy(); res(null); }, 4000);
-    sock.on('connect', () => sock.write(JSON.stringify({ action }) + '\n'));
+    sock.on('connect', () => sock.write(JSON.stringify({ action, token: info.token }) + '\n'));
     sock.on('data', (d) => { buf += d.toString(); const i = buf.indexOf('\n'); if (i >= 0) { clearTimeout(to); sock.destroy(); try { res(JSON.parse(buf.slice(0, i))); } catch { res(null); } } });
     sock.on('error', () => { clearTimeout(to); res(null); });
   });

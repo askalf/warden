@@ -15,12 +15,12 @@ const sockPath = (n) => (process.platform === 'win32' ? `\\\\.\\pipe\\warden-fas
 
 // One round-trip exactly as the native binary does it: write `<raw hook json>\n`,
 // read until the first newline, return the bytes before it (verbatim stdout).
-function tcpHook(port, payload) {
+function tcpHook(port, payload, token) {
   return new Promise((resolve, reject) => {
     const sock = net.connect(port, '127.0.0.1');
     let buf = '';
     const to = setTimeout(() => { sock.destroy(); reject(new Error('timeout')); }, 2000);
-    sock.on('connect', () => sock.write(JSON.stringify(payload) + '\n'));
+    sock.on('connect', () => sock.write(JSON.stringify(token === undefined ? payload : { ...payload, token }) + '\n'));
     sock.on('data', (d) => {
       buf += d.toString();
       const i = buf.indexOf('\n');
@@ -37,21 +37,27 @@ test('fast-hook: block -> exact deny bytes; benign -> empty line; discovery file
   try {
     const port = d.address().port;
     assert.ok(port > 0, 'ephemeral port assigned');
+    const token = JSON.parse(fs.readFileSync(infoFile, 'utf8')).token;
+    assert.ok(token && token.length >= 16, 'a capability token is published');
 
     // catastrophic shell -> deny, with the precise CC hook envelope
-    const denyLine = await tcpHook(port, { tool_name: 'Bash', tool_input: { command: 'rm -rf /' }, hook_event_name: 'PreToolUse' });
+    const denyLine = await tcpHook(port, { tool_name: 'Bash', tool_input: { command: 'rm -rf /' }, hook_event_name: 'PreToolUse' }, token);
     const deny = JSON.parse(denyLine);
     assert.equal(deny.hookSpecificOutput.hookEventName, 'PreToolUse');
     assert.equal(deny.hookSpecificOutput.permissionDecision, 'deny');
     assert.match(deny.hookSpecificOutput.permissionDecisionReason, /warden blocked \(black\)/);
 
     // benign read -> defer, i.e. the binary prints nothing
-    const allowLine = await tcpHook(port, { tool_name: 'Read', tool_input: { file_path: 'README.md' }, hook_event_name: 'PreToolUse' });
+    const allowLine = await tcpHook(port, { tool_name: 'Read', tool_input: { file_path: 'README.md' }, hook_event_name: 'PreToolUse' }, token);
     assert.equal(allowLine, '', 'defer emits an empty line (no stdout)');
 
     // approve-tier under the default (non-strict) policy also defers
-    const infraLine = await tcpHook(port, { tool_name: 'Bash', tool_input: { command: 'kubectl delete namespace prod' }, hook_event_name: 'PreToolUse' });
+    const infraLine = await tcpHook(port, { tool_name: 'Bash', tool_input: { command: 'kubectl delete namespace prod' }, hook_event_name: 'PreToolUse' }, token);
     assert.equal(infraLine, '', 'non-strict policy does not gate approve-tier');
+
+    // UNAUTHENTICATED hook request -> empty line (rejected, not processed)
+    const noAuth = await tcpHook(port, { tool_name: 'Bash', tool_input: { command: 'rm -rf /' }, hook_event_name: 'PreToolUse' }, 'wrong-token');
+    assert.equal(noAuth, '', 'unauthorized hook request is rejected (defer), never processed');
 
     // discovery file: 0600-ish, has the port + our pid
     const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
@@ -70,7 +76,8 @@ test('fast-hook: strict policy gates approve-tier as ask', async () => {
   await new Promise((r) => setTimeout(r, 150));
   try {
     const port = d.address().port;
-    const line = await tcpHook(port, { tool_name: 'Bash', tool_input: { command: 'terraform destroy -auto-approve' }, hook_event_name: 'PreToolUse' });
+    const token = JSON.parse(fs.readFileSync(infoFile, 'utf8')).token;
+    const line = await tcpHook(port, { tool_name: 'Bash', tool_input: { command: 'terraform destroy -auto-approve' }, hook_event_name: 'PreToolUse' }, token);
     const v = JSON.parse(line);
     assert.equal(v.hookSpecificOutput.permissionDecision, 'ask');
     assert.match(v.hookSpecificOutput.permissionDecisionReason, /warden flagged \(red\)/);
@@ -89,7 +96,8 @@ test('daemon forwards the judge to checkAsync (evasion gray -> judge -> block)',
   await new Promise((r) => setTimeout(r, 150));
   try {
     const port = d.address().port;
-    const line = await tcpHook(port, { action: { tool: 'shell', input: { command: 'X=rm; $X -rf /' } } });
+    const token = JSON.parse(fs.readFileSync(infoFile, 'utf8')).token;
+    const line = await tcpHook(port, { action: { tool: 'shell', input: { command: 'X=rm; $X -rf /' } } }, token);
     const v = JSON.parse(line);
     assert.equal(v.decision, 'block');
     assert.equal(v.tier, 'black');

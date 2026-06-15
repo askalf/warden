@@ -53,7 +53,7 @@ try {
   ask = (action, skillText) => new Promise((res) => {
     const s = net.connect(info.port, '127.0.0.1'); let b = '';
     const to = setTimeout(() => { s.destroy(); res(null); }, 4000);
-    s.on('connect', () => s.write(JSON.stringify({ action, skillText: skillText || '' }) + '\n'));
+    s.on('connect', () => s.write(JSON.stringify({ action, skillText: skillText || '', token: info.token }) + '\n'));
     s.on('data', (d) => { b += d; const i = b.indexOf('\n'); if (i >= 0) { clearTimeout(to); s.destroy(); try { res(JSON.parse(b.slice(0, i))); } catch { res(null); } } });
     s.on('error', () => { clearTimeout(to); res(null); });
   });

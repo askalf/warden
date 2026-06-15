@@ -11,8 +11,9 @@
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { check, checkAsync } from './index.mjs';
-import { AuditLog } from './audit.mjs';
+import { ChainedFileAudit } from './audit.mjs';
 import { loadPolicy } from './policy.mjs';
 import { wardenSocket, wardenInfoFile } from './client.mjs';
 import { ccToAction, verdictToHook } from './cc-hook.mjs';
@@ -32,7 +33,13 @@ export function startDaemon({
   tcp = false, tcpPort = 0, infoFile = wardenInfoFile(), onLog = () => {},
 } = {}) {
   let policy = configPath ? loadPolicy(configPath) : {};
-  const audit = new AuditLog();
+  // Tamper-evident, streaming audit straight to disk (no in-memory buffer to leak).
+  const fileAudit = auditPath ? new ChainedFileAudit(auditPath) : null;
+  // Capability token: published only into the 0600 discovery file, so only a
+  // process that can read that file (the owner) can talk to the daemon. Closes
+  // the unauth'd-local-process vectors (LLM-proxy abuse via the judge tier,
+  // audit pollution). Enforced whenever a token exists; honors WARDEN_TOKEN.
+  const token = (tcp || process.env.WARDEN_TOKEN) ? (process.env.WARDEN_TOKEN || crypto.randomBytes(18).toString('base64url')) : null;
   let served = 0;
 
   // Hot-reload policy on change. unref() so the watcher never keeps the process
@@ -55,27 +62,31 @@ export function startDaemon({
         let req;
         try { req = JSON.parse(line); } catch { sock.write(JSON.stringify({ error: 'bad json' }) + '\n'); continue; }
 
+        // CC hook fast path: a raw Claude Code PreToolUse payload.
+        const isHook = req.tool_name !== undefined || req.hook_event_name !== undefined;
+
+        // Reject unauthenticated callers. Hook shape gets an empty line (the
+        // client reads that as "defer" and falls back to its own in-process
+        // check — fail-safe, never fail-open); action shape gets an error.
+        if (token && req.token !== token) {
+          sock.write((isHook ? '' : JSON.stringify({ error: 'unauthorized' })) + '\n'); continue;
+        }
+
         if (req.cmd === 'stats' && req.action === undefined && req.tool_name === undefined) {
           sock.write(JSON.stringify({ served, pid: process.pid }) + '\n'); continue;
         }
 
-        // CC hook fast path: a raw Claude Code PreToolUse payload.
-        const isHook = req.tool_name !== undefined || req.hook_event_name !== undefined;
         const action = isHook ? ccToAction(req.tool_name, req.tool_input || {}) : req.action;
 
         try {
           const v = judge
-            ? await checkAsync(action, policy, { audit, skillText: req.skillText || '', judge })
-            : check(action, policy, { audit, skillText: req.skillText || '' });
+            ? await checkAsync(action, policy, { skillText: req.skillText || '', judge })
+            : check(action, policy, { skillText: req.skillText || '' });
           served++;
-          if (auditPath) {
-            try {
-              fs.appendFileSync(auditPath, JSON.stringify({
-                ts: new Date().toISOString(), tool: action && action.tool, tier: v.tier,
-                decision: v.decision, why: v.why, via: isHook ? 'cc-hook' : 'action',
-              }) + '\n');
-            } catch {}
-          }
+          if (fileAudit) fileAudit.record({
+            ts: new Date().toISOString(), tool: action && action.tool, tier: v.tier,
+            decision: v.decision, why: v.why, via: isHook ? 'cc-hook' : 'action',
+          });
           if (isHook) sock.write(hookStdout(v, !!(policy && policy.strict)) + '\n');
           else sock.write(JSON.stringify(v) + '\n');
         } catch (e) {
@@ -104,7 +115,7 @@ export function startDaemon({
       const port = tcpServer.address().port;
       try {
         fs.mkdirSync(path.dirname(infoFile), { recursive: true });
-        fs.writeFileSync(infoFile, JSON.stringify({ port, pid: process.pid, socket: socketPath, started: new Date().toISOString() }), { mode: 0o600 });
+        fs.writeFileSync(infoFile, JSON.stringify({ port, pid: process.pid, socket: socketPath, token, started: new Date().toISOString() }), { mode: 0o600 });
       } catch (e) { onLog('info-file write failed: ' + e.message); }
       onLog('fast-hook tcp on 127.0.0.1:' + port);
     });

@@ -3,6 +3,7 @@
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import fs from 'node:fs';
 
 export function wardenSocket() {
   if (process.env.WARDEN_SOCKET) return process.env.WARDEN_SOCKET;
@@ -25,6 +26,12 @@ export function wardenInfoFile() {
  * Resolves null on ANY failure (no daemon, timeout, bad reply) so the caller
  * can fall back to an in-process check.
  */
+// The daemon's capability token, read from the 0600 discovery file. Only a
+// process that can read that file (the owner) can authenticate.
+export function wardenToken() {
+  try { return JSON.parse(fs.readFileSync(wardenInfoFile(), 'utf8')).token || undefined; } catch { return undefined; }
+}
+
 export function daemonCheck(payload, { socketPath = wardenSocket(), timeoutMs = 1500 } = {}) {
   return new Promise((resolve) => {
     let done = false;
@@ -32,11 +39,14 @@ export function daemonCheck(payload, { socketPath = wardenSocket(), timeoutMs = 
     const sock = net.connect(socketPath);
     const to = setTimeout(() => finish(null), timeoutMs);
     let buf = '';
-    sock.on('connect', () => sock.write(JSON.stringify(payload) + '\n'));
+    const msg = { ...payload, token: payload.token ?? wardenToken() };
+    sock.on('connect', () => sock.write(JSON.stringify(msg) + '\n'));
     sock.on('data', (d) => {
       buf += d.toString();
       const i = buf.indexOf('\n');
-      if (i >= 0) { clearTimeout(to); try { finish(JSON.parse(buf.slice(0, i))); } catch { finish(null); } }
+      // An { error } reply (e.g. unauthorized) resolves to null so the caller
+      // falls back to an in-process check — screening continues, never fails open.
+      if (i >= 0) { clearTimeout(to); try { const r = JSON.parse(buf.slice(0, i)); finish(r && r.error ? null : r); } catch { finish(null); } }
     });
     sock.on('error', () => { clearTimeout(to); finish(null); });
     sock.on('close', () => { clearTimeout(to); finish(null); });
