@@ -9,7 +9,7 @@ export const WRITE = ['write', 'edit', 'create', 'append', 'notebookedit'];
 export const READONLY = ['read', 'get', 'list', 'ls', 'grep', 'glob', 'status', 'stat'];
 
 export const BLACK_SHELL = [
-  { re: /\brm\s+-[a-z]*r[a-z]*f?\b[^|]*(\s|\/|~|\$HOME|\*)/i, why: 'recursive force-delete' },
+  { re: /\brm\s+-[a-z]*r[a-z]*f?\b[^|]*?(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|\s\$HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete of root/home/system/glob' },
   { re: /\bmkfs(\.\w+)?\b/i, why: 'format filesystem' },
   { re: /\bdd\b[^|]*\bof=\/dev\/(sd|nvme|disk)/i, why: 'raw disk overwrite' },
   { re: /:\(\)\s*\{\s*:\s*\|\s*:?\s*&\s*\}\s*;\s*:/, why: 'fork bomb' },
