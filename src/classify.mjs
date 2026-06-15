@@ -120,6 +120,36 @@ export const YELLOW_SHELL = [
   { re: /(^|\s)(echo|printf)\b[^|]*>{1,2}/i, why: 'writes to a file' },
 ];
 
+// Blank the quoted ARGUMENT of text-data flags so an attack string inside a
+// commit message or grep pattern isn't matched as a live command. Surgical on
+// purpose: only -m/--message/--grep values and grep/rg/ag patterns — never a
+// path, an executor body, or a structured payload. (Caller skips this for
+// non-string commands.) A real unquoted `curl | bash` is untouched.
+export function neutralizeQuotedData(cmd) {
+  let out = '', i = 0, tok = '', blankNext = false, grepPending = false;
+  const onToken = () => {
+    const b = tok.replace(/^.*[\\/]/, '').toLowerCase();
+    if (/^(?:-m|--message|--grep)=?$/.test(b)) blankNext = true;
+    else if (/^(?:e?grep|fgrep|rg|ag|ack)$/.test(b)) { grepPending = true; blankNext = false; }
+    else { blankNext = false; if (grepPending && b && !b.startsWith('-')) grepPending = false; } // unquoted positional = grep's pattern
+    tok = '';
+  };
+  while (i < cmd.length) {
+    const ch = cmd[i];
+    if (ch === '"' || ch === "'") {
+      if (tok) onToken();
+      let j = i + 1; while (j < cmd.length && cmd[j] !== ch) j++;
+      const closed = j < cmd.length;
+      out += ch + ((blankNext || grepPending) ? '' : cmd.slice(i + 1, j)) + (closed ? ch : '');
+      i = closed ? j + 1 : j; blankNext = false; grepPending = false; continue;
+    }
+    if (/\s/.test(ch)) { if (tok) onToken(); out += ch; i++; continue; }
+    if (ch === '|' || ch === ';' || ch === '&') { tok = ''; blankNext = false; grepPending = false; out += ch; i++; continue; }
+    tok += ch; out += ch; i++;
+  }
+  return out;
+}
+
 /** Classify an action {tool, input} into a risk tier with reasons. */
 export function classify(action) {
   const tool = (action.tool || '').toLowerCase();
@@ -139,13 +169,42 @@ export function classify(action) {
     let cmd = typeof cmdField === 'string' ? cmdField
       : Array.isArray(cmdField) ? cmdField.map(String).join(' ')
       : safeStringify(input);
-    // defeat fullwidth/homoglyph evasion (NFKC maps ＲＭ → RM, etc.)
+    // defeat fullwidth/homoglyph evasion (NFKC maps ＲＭ → RM, etc.) and strip
+    // invisible formatting chars (zero-width, soft-hyphen, bidi) used to split
+    // keywords — a zero-width split like r<zwnj>m becomes rm. None belong here.
     cmd = cmd.normalize('NFKC');
+    const ZW = new Set([0x00AD,0x200B,0x200C,0x200D,0x200E,0x200F,0x202A,0x202B,0x202C,0x202D,0x202E,0x2060,0x2061,0x2062,0x2063,0x2064,0xFEFF]);
+    if (ZW.size) cmd = Array.from(cmd, (c) => (ZW.has(c.codePointAt(0)) ? '' : c)).join('');
     if (cmd.length > 16384) { why.push('⚠ oversized command (' + cmd.length + 'B) — gated for review'); return { tier: TIER.RED, why }; }
     if (!SHELL.includes(tool)) why.push('⚠ shell-command field on a non-shell tool (' + (tool || 'unknown') + ')');
-    for (const p of BLACK_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
-    for (const p of RED_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.RED); why.push('⚠ ' + p.why); }
-    for (const p of YELLOW_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.YELLOW); why.push('· ' + p.why); }
+    // match against the command with quoted DATA neutralized (so an attack string
+    // inside a commit message / grep pattern isn't treated as a live command).
+    // Only for genuine string commands — a stringified object/array payload must
+    // be matched whole (its dangerous content is the attack, not "data").
+    const mcmd = typeof cmdField === 'string' ? neutralizeQuotedData(cmd) : cmd;
+    for (const p of BLACK_SHELL) if (p.re.test(mcmd)) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
+    for (const p of RED_SHELL) if (p.re.test(mcmd)) { tier = worst(tier, TIER.RED); why.push('⚠ ' + p.why); }
+    for (const p of YELLOW_SHELL) if (p.re.test(mcmd)) { tier = worst(tier, TIER.YELLOW); why.push('· ' + p.why); }
+    // a shell executor RUNS its quoted body — `bash -c "rm -rf /"`, `eval "…"` —
+    // so classify that body at a clean boundary (where `rm -rf /` matches black),
+    // not as gated text. (echo "rm -rf /" has no executor → stays gated.)
+    if (typeof cmdField === 'string' && /\b(?:bash|sh|zsh|dash|ksh|ash)\s+-[a-z]*c\b|\beval\b/i.test(cmd)) {
+      for (const mm of cmd.matchAll(/\b(?:bash|sh|zsh|dash|ksh|ash)\s+-[a-z]*c\s+(['"])([\s\S]*?)\1|\beval\s+(['"])([\s\S]*?)\3/gi)) {
+        const body = mm[2] || mm[4];
+        if (body && body !== cmd) { const sub = classify({ tool: 'shell', input: { command: body } }); if (ORDER[sub.tier] > ORDER[tier]) { tier = sub.tier; why.push('☠ executor runs a ' + sub.tier + '-tier command'); } }
+      }
+    } else if (cmdField && typeof cmdField === 'object') {
+      // a structured command can bury a dangerous string in a leaf where the JSON
+      // boundary (…/"}) keeps it off the catastrophic anchor — classify each leaf
+      // at a clean boundary too, so `{nested:"rm -rf /"}` can't silent-downgrade.
+      const leaves = [], seen = new Set();
+      const walk = (v, d) => { if (d > 6 || leaves.length > 64 || v == null) return;
+        if (typeof v === 'string') leaves.push(v);
+        else if (typeof v === 'object' && !seen.has(v)) { seen.add(v); for (const x of Object.values(v)) walk(x, d + 1); } };
+      walk(cmdField, 0);
+      for (const leaf of leaves) { const sub = classify({ tool: 'shell', input: { command: leaf } });
+        if (ORDER[sub.tier] > ORDER[tier]) { tier = sub.tier; for (const w of sub.why) if (/[☠⚠]/.test(w) && !why.includes(w)) why.push(w); } }
+    }
     if (tier === TIER.GREEN) why.push(SHELL.includes(tool) ? '· read-only shell' : '· command field — read-only');
   } else if (WRITE.includes(tool)) {
     tier = TIER.YELLOW; why.push('· file write (reversible)');
