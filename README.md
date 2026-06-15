@@ -14,6 +14,8 @@ It sits between an agent and its tools, and on every action it:
 
 Deterministic and offline by default (zero runtime deps). An optional **LLM judge tier** refines gray-zone calls — and it can only *raise* risk, never lower a block.
 
+Coverage is **measured, not assumed**: `npm run bench` scores a labeled corpus (80 samples across 8 attack families — RCE, destruction, exfil, SSRF, persistence, security-disabling, container escape, prompt-injection) and reports catch-rate + false-positive rate. Currently **100% catch, 0% false positives**. Threat model: [SECURITY.md](SECURITY.md).
+
 ## Quick start
 
 ```js
@@ -72,9 +74,16 @@ const v = await checkAsync(action, policy, { judge });
 ## CLI
 
 ```bash
-warden check '{"tool":"shell","input":{"command":"rm -rf /"}}'
-warden scan-mcp ./mcp-tools.json
+warden check '{"tool":"shell","input":{"command":"rm -rf /"}}'   # firewall one action
+warden scan-mcp ./mcp-tools.json                                  # scan an MCP manifest for poisoning
+warden init                                                       # scan project -> starter warden.config.json
+warden audit --blocks                                             # what warden has stopped (also --tier black, --tail N)
+warden-serve                                                      # run the daemon (shared classifier + audit, policy hot-reload)
 ```
+
+## Daemon (optional)
+
+`warden-serve` runs a long-lived process that loads the classifier + policy once, keeps a persistent hash-chained audit, hot-reloads policy on change, and can host the judge tier. The Claude Code hook tries the daemon first and **falls back to in-process** if it isn't running, so nothing breaks either way. (It offloads classification CPU; it does not eliminate node's per-call process-startup cost.)
 
 ## Demo
 
