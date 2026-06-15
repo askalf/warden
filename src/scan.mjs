@@ -61,6 +61,23 @@ export function isExternal(host, allow = []) {
   return true;
 }
 
+// Classify a URL host's IP scope for SSRF detection (strips userinfo + port).
+// linklocal = the 169.254/16 cloud-metadata range; private = RFC1918;
+// loopback = 127/8 + ::1 (intentionally NOT flagged — dev-server noise).
+export function ipScope(host) {
+  if (!host) return null;
+  let h = String(host).toLowerCase();
+  const at = h.lastIndexOf('@'); if (at >= 0) h = h.slice(at + 1);
+  h = h.replace(/^\[([^\]]*)\](?::\d+)?$/, '$1');
+  if (/^[^:]+:\d+$/.test(h)) h = h.replace(/:\d+$/, '');
+  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(h)) return 'linklocal';
+  if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h) || h === '::1') return 'loopback';
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return 'private';
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(h)) return 'private';
+  if (/^172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(h)) return 'private';
+  return null;
+}
+
 export function scanSecrets(action) {
   const text = safeStringify(action.input || {});
   const flags = [];

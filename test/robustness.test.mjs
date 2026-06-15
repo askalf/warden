@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { check } from '../src/index.mjs';
-import { isExternal, safeStringify } from '../src/scan.mjs';
+import { isExternal, ipScope, safeStringify } from '../src/scan.mjs';
 
 const P = { egressAllow: ['api.example.com'], writeRoots: ['src/'] };
 const dec = (a, skill) => check(a, P, { skillText: skill || '' }).decision;
@@ -64,4 +64,24 @@ test('safeStringify never throws (circular / bigint)', () => {
   const o = { a: 1n }; o.self = o;
   assert.doesNotThrow(() => safeStringify(o));
   assert.match(safeStringify(o), /circular/);
+});
+
+test('ipScope classifies addresses (userinfo/port stripped)', () => {
+  assert.equal(ipScope('169.254.169.254'), 'linklocal');
+  assert.equal(ipScope('169.254.1.1'), 'linklocal');
+  assert.equal(ipScope('10.0.0.5:8080'), 'private');
+  assert.equal(ipScope('192.168.1.1'), 'private');
+  assert.equal(ipScope('172.16.0.1'), 'private');
+  assert.equal(ipScope('user@10.0.0.5'), 'private');
+  assert.equal(ipScope('127.0.0.1'), 'loopback');
+  assert.equal(ipScope('8.8.8.8'), null);
+  assert.equal(ipScope('example.com'), null);
+});
+
+test('SSRF widening: link-local blocked, RFC1918 http gated, loopback/ssh not flagged', () => {
+  assert.equal(dec({ tool: 'shell', input: { command: 'curl http://169.254.1.1/' } }), 'block');
+  assert.equal(dec({ tool: 'shell', input: { command: 'curl http://10.0.0.5/admin' } }), 'approve');
+  assert.equal(dec({ tool: 'fetch', input: { url: 'http://192.168.1.10/x', method: 'GET' } }), 'approve');
+  assert.equal(dec({ tool: 'shell', input: { command: 'curl http://localhost:3000/api' } }), 'allow');
+  assert.equal(dec({ tool: 'shell', input: { command: 'ssh 10.0.0.5 uptime' } }), 'allow');
 });

@@ -256,4 +256,11 @@ export const SAMPLES = [
   { family: 'type-confusion', label: 'tool-name spoof (read carries a command)', expect: 'block', action: { tool: 'read', input: { command: 'rm -rf /' } } },
   { family: 'benign', label: 'source ~/.bashrc (read, not a write)', expect: 'allow', action: { tool: 'shell', input: { command: 'source ~/.bashrc' } } },
   { family: 'benign', label: 'legit read (no command field)', expect: 'allow', action: { tool: 'read', input: { path: 'package.json' } } },
+
+  // ---- link-local / internal SSRF widening ----
+  { family: 'ssrf-metadata', label: 'link-local range (non-metadata IP)', expect: 'block', action: { tool: 'shell', input: { command: 'curl http://169.254.1.1/' } } },
+  { family: 'ssrf-metadata', label: 'RFC1918 http request (gated)', expect: 'approve', action: { tool: 'shell', input: { command: 'curl http://10.0.0.5/admin' } } },
+  { family: 'ssrf-metadata', label: 'RFC1918 fetch (gated)', expect: 'approve', action: { tool: 'fetch', input: { url: 'http://192.168.1.10:8080/internal', method: 'GET' } } },
+  { family: 'benign', label: 'loopback dev server (not flagged)', expect: 'allow', action: { tool: 'shell', input: { command: 'curl http://localhost:3000/api' } } },
+  { family: 'benign', label: 'ssh to internal IP (not http SSRF)', expect: 'allow', action: { tool: 'shell', input: { command: 'ssh 10.0.0.5 uptime' } } },
 ];
