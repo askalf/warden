@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.mjs",
     "./mcp": "./src/mcp.mjs",
-    "./judge": "./src/judge.mjs"
+    "./judge": "./src/judge.mjs",
+    "./wrap": "./src/wrap.mjs"
   },
   "bin": {
     "warden": "./src/cli.mjs",

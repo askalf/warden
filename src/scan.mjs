@@ -35,7 +35,10 @@ export function scanSecrets(action) {
   return { flags, hosts, hasSecret: flags.length > 0 };
 }
 
-export function scanInjection(action, skillText = '') {
-  const text = JSON.stringify(action.input || {}) + ' ' + skillText;
+export function injectionHits(text = '') {
   return INJECTION_RE.filter((p) => p.re.test(text)).map((p) => p.why);
+}
+
+export function scanInjection(action, skillText = '') {
+  return injectionHits(JSON.stringify(action.input || {}) + ' ' + skillText);
 }

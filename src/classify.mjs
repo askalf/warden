@@ -16,6 +16,9 @@ export const BLACK_SHELL = [
   { re: /\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(ba)?sh\b/i, why: 'pipe remote script to shell (RCE)' },
   { re: /\bchmod\s+-R\s+0?777\s+\//i, why: 'world-writable root' },
   { re: /\bhistory\s+-c\b|\bunset\s+HISTFILE\b|rm\s+[^|]*\.bash_history/i, why: 'covering tracks (history wipe)' },
+  { re: /\/dev\/tcp\//i, why: 'reverse shell (/dev/tcp)' },
+  { re: /\bnc\b[^|]*\s-[a-z]*e\b/i, why: 'netcat exec (reverse shell)' },
+  { re: /\beval\b[^|]*\$\(\s*(?:curl|wget)\b/i, why: 'eval of remote download (RCE)' },
 ];
 export const RED_SHELL = [
   { re: /\bsudo\b/i, why: 'privilege escalation' },

@@ -1,6 +1,6 @@
 // warden — own your agent security. A guard between an agent and its tools.
-import { TIER, ORDER, worst, classify, NET, WRITE } from './classify.mjs';
-import { scanSecrets, scanInjection, isExternal } from './scan.mjs';
+import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
+import { scanSecrets, injectionHits, isExternal } from './scan.mjs';
 import { matchRule, DEFAULT_POLICY, loadPolicy } from './policy.mjs';
 import { AuditLog } from './audit.mjs';
 
@@ -12,23 +12,27 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   const tool = (action.tool || '').toLowerCase();
   const base = classify(action);
   const secrets = scanSecrets(action);
-  const injection = scanInjection(action, skillText);
   let tier = base.tier;
   const why = [...base.why];
 
+  const active = SHELL.includes(tool) || NET.includes(tool); // executes or sends — only here is data "in motion"
   const externalHosts = secrets.hosts.filter((h) => isExternal(h, egressAllow));
 
-  if (secrets.hasSecret && externalHosts.length) {
+  // exfil = a secret + an external destination, but ONLY when the tool actually sends (shell/net).
+  // A secret sitting in file content (write/read) is flagged red, not treated as exfiltration.
+  if (secrets.hasSecret && externalHosts.length && active) {
     tier = TIER.BLACK;
     why.push('☠ EXFIL: ' + secrets.flags.join('; ') + ' → external ' + externalHosts.join(','));
   } else if (secrets.hasSecret) {
     tier = worst(tier, TIER.RED);
     why.push(...secrets.flags.map((f) => '⚠ ' + f));
   }
-  if (injection.length) {
-    tier = TIER.BLACK;
-    why.push(...injection.map((f) => '☠ injection/poisoned-skill: ' + f));
-  }
+  // injection: a poisoned skill is always black; injection in an executable arg is black;
+  // injection patterns in passive file content are flagged red (it's data, not execution).
+  const injSkill = injectionHits(skillText || '');
+  if (injSkill.length) { tier = TIER.BLACK; why.push(...injSkill.map((f) => '☠ poisoned-skill: ' + f)); }
+  const injInput = injectionHits(JSON.stringify(action.input || {}));
+  if (injInput.length) { const it = active ? TIER.BLACK : TIER.RED; tier = worst(tier, it); why.push(...injInput.map((f) => (active ? '☠' : '⚠') + ' injection: ' + f)); }
   if (NET.includes(tool) && externalHosts.length && egressAllow.length) {
     tier = worst(tier, TIER.RED);
     why.push('⚠ egress to non-allowlisted host(s): ' + externalHosts.join(','));
