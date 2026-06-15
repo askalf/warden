@@ -19,8 +19,8 @@ const sock = process.platform === 'win32' ? `\\\\.\\pipe\\warden-smoke-${process
 
 // Async spawn (not spawnSync): the daemon runs in THIS process, so blocking the
 // event loop would deadlock the connection. Writes UTF-8 stdin, like CC does.
-const run = (payload, info = infoFile) => new Promise((resolve) => {
-  const c = spawn(exe, [], { env: { ...process.env, WARDEN_INFO: info } });
+const run = (payload, extra = {}) => new Promise((resolve) => {
+  const c = spawn(exe, [], { env: { ...process.env, WARDEN_INFO: infoFile, ...extra } });
   let out = '';
   c.stdout.on('data', (d) => { out += d.toString(); });
   c.on('close', (code) => resolve({ out, code }));
@@ -42,11 +42,19 @@ try {
   assert.equal(ben.code, 0);
   console.log('benign    -> defer  ✓   exit', ben.code, '  (empty stdout)');
 
-  // daemon-down path must fail open (exit 0, no output) so CC never blocks.
-  const down = await run({ tool_name: 'Bash', tool_input: { command: 'ls' } }, path.join(os.tmpdir(), 'nope-' + process.pid + '.json'));
-  assert.equal(down.out, '');
+  // daemon-down must fail SAFE: warden-fast falls back to the node hook, which
+  // still screens in-process. A malicious task is denied even with no daemon.
+  const noDaemon = {
+    WARDEN_INFO: path.join(os.tmpdir(), 'nope-' + process.pid + '.json'),
+    WARDEN_SOCKET: process.platform === 'win32' ? `\\\\.\\pipe\\warden-nope-${process.pid}` : path.join(os.tmpdir(), `warden-nope-${process.pid}.sock`),
+    WARDEN_NODE: process.execPath,
+    WARDEN_FALLBACK_HOOK: path.join(dir, '..', 'src', 'cc-hook.mjs'),
+  };
+  const down = await run({ tool_name: 'Bash', tool_input: { command: 'rm -rf /' }, hook_event_name: 'PreToolUse' }, noDaemon);
+  const dj = JSON.parse(down.out);
+  assert.equal(dj.hookSpecificOutput.permissionDecision, 'deny');
   assert.equal(down.code, 0);
-  console.log('no daemon -> defer  ✓   exit', down.code, '  (fail-open)');
+  console.log('no daemon -> node fallback SCREENS  ✓   exit', down.code, ' ', down.out.slice(0, 60), '…');
 } catch (e) {
   ok = false;
   console.error('FAIL:', e.message);

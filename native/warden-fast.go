@@ -7,10 +7,14 @@
 //
 // It is a pure byte pipe: it parses none of the hook payload, holds no policy,
 // runs no classifier. All of that lives in the daemon, the single source of
-// truth. Fail-open by design: any error (no daemon, timeout, short read) exits
-// 0 with no output, so a warden hiccup can never block your tooling. When the
-// daemon is down, Claude Code simply proceeds — the node hook remains the
-// safe, daemon-free fallback if you register it instead.
+// truth.
+//
+// Fail SAFE, not open: if the daemon can't be reached (not running, timeout,
+// short read), it falls back to the Node hook (src/cc-hook.mjs), which screens
+// in-process — slower, but it still screens. Only if that fallback is also
+// unavailable does it fail open (exit 0, no output) so warden can never brick
+// your tooling. The fast ~2ms path is unchanged; the fallback is a cold path
+// that runs only when the daemon is down.
 package main
 
 import (
@@ -19,6 +23,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -38,8 +43,77 @@ func infoPath() string {
 	return filepath.Join(home, ".warden", "daemon.json")
 }
 
+// tryDaemon forwards `<payload>\n` to the loopback daemon and returns the bytes
+// before the first newline (the exact stdout the hook should emit; may be
+// empty for allow/defer). ok is true only if a full line came back — so an
+// empty allow is a success, but an unreachable daemon is not.
+func tryDaemon(payload []byte) (out []byte, ok bool) {
+	raw, err := os.ReadFile(infoPath())
+	if err != nil {
+		return nil, false
+	}
+	var info struct {
+		Port int `json:"port"`
+	}
+	if json.Unmarshal(raw, &info) != nil || info.Port <= 0 {
+		return nil, false
+	}
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(info.Port)), dialTimeout)
+	if err != nil {
+		return nil, false
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
+	if _, err := conn.Write(append(payload, '\n')); err != nil {
+		return nil, false
+	}
+	buf := make([]byte, 0, 512)
+	tmp := make([]byte, 512)
+	for {
+		n, rerr := conn.Read(tmp)
+		if n > 0 {
+			buf = append(buf, tmp[:n]...)
+			if i := bytes.IndexByte(buf, '\n'); i >= 0 {
+				return buf[:i], true
+			}
+		}
+		if rerr != nil {
+			return nil, false
+		}
+	}
+}
+
+// fallbackNode runs the Node hook with payload on stdin, wiring its stdout/exit
+// straight through. Returns false if the hook can't be located or launched, so
+// the caller can fail open as a last resort.
+func fallbackNode(payload []byte) bool {
+	hook := os.Getenv("WARDEN_FALLBACK_HOOK")
+	if hook == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			return false
+		}
+		hook = filepath.Join(filepath.Dir(exe), "..", "src", "cc-hook.mjs")
+	}
+	if _, err := os.Stat(hook); err != nil {
+		return false
+	}
+	node := os.Getenv("WARDEN_NODE")
+	if node == "" {
+		node = "node"
+	}
+	cmd := exec.Command(node, hook)
+	cmd.Stdin = bytes.NewReader(payload)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	os.Exit(cmd.ProcessState.ExitCode()) // propagate the node hook's exit (always 0)
+	return true
+}
+
 func main() {
-	// 1. Claude Code's hook payload arrives on stdin (compact JSON, one line).
 	in, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		os.Exit(0) // fail-open
@@ -49,50 +123,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	// 2. Find the daemon's loopback port from the 0600 discovery file.
-	ip := infoPath()
-	if ip == "" {
+	// Hot path: the daemon (~2ms). deny/ask -> JSON; allow/defer -> empty.
+	if out, ok := tryDaemon(payload); ok {
+		_, _ = os.Stdout.Write(out)
 		os.Exit(0)
 	}
-	raw, err := os.ReadFile(ip)
-	if err != nil {
-		os.Exit(0) // no daemon running -> defer (CC proceeds)
-	}
-	var info struct {
-		Port int `json:"port"`
-	}
-	if json.Unmarshal(raw, &info) != nil || info.Port <= 0 {
-		os.Exit(0)
-	}
-
-	// 3. Forward `<payload>\n`, read back one line, print the bytes before it.
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(info.Port)), dialTimeout)
-	if err != nil {
-		os.Exit(0) // daemon down -> fail-open
-	}
-	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
-	if _, err := conn.Write(append(payload, '\n')); err != nil {
-		_ = conn.Close()
-		os.Exit(0)
-	}
-
-	buf := make([]byte, 0, 512)
-	tmp := make([]byte, 512)
-	for {
-		n, rerr := conn.Read(tmp)
-		if n > 0 {
-			buf = append(buf, tmp[:n]...)
-			if i := bytes.IndexByte(buf, '\n'); i >= 0 {
-				// deny/ask -> a hookSpecificOutput JSON; defer/allow -> empty.
-				_, _ = os.Stdout.Write(buf[:i])
-				_ = conn.Close()
-				os.Exit(0)
-			}
-		}
-		if rerr != nil {
-			break
-		}
-	}
-	_ = conn.Close()
-	os.Exit(0) // no newline seen -> defer
+	// Daemon unreachable -> fall back to the Node hook (still screens).
+	fallbackNode(payload)
+	os.Exit(0) // fallback unavailable -> fail open (never block tooling)
 }
