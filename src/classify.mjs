@@ -28,10 +28,19 @@ export const BLACK_SHELL = [
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b)[^|]*[\\/]etc[\\/](?:cron|systemd)/i, why: 'writes a persistence unit (cron/systemd)' },
   { re: /\b(?:tar|cat|cp|zip|gzip|dd)\b[^|]*(?:\.ssh|id_rsa|id_ed25519|\.aws|\.env\b|authorized_keys|credentials)[^|]*\|\s*(?:nc|ncat|curl|wget|socat)\b/i, why: 'pipe sensitive files to the network (exfil)' },
   { re: /\b(?:scp|rsync)\b(?:\s+-\w+\s+\S+|\s+-\w+)*\s+\S*(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem\b|\.ppk\b|\.aws[\\/]credentials|\.env\b)\S*\s+\S*@\S+:/i, why: 'exfiltrate a key/credential via scp/rsync' },
+  { re: /\breg\s+add\b[^|]*(?:CurrentVersion[\\/]+Run|Image\s+File\s+Execution)/i, why: 'registry Run-key persistence' },
+  { re: /\bpowershell(?:\.exe)?\b[^|]*\s-e(?:c|nc|ncodedcommand)?\b\s+[A-Za-z0-9+/=]{16,}/i, why: 'powershell encoded command (obfuscation)' },
+  { re: /\b(?:IEX|Invoke-Expression|iwr|irm)\b[^|]*(?:DownloadString|DownloadFile|Net\.WebClient|Invoke-WebRequest|https?:)/i, why: 'powershell download-cradle (RCE)' },
+  { re: /\bvssadmin\b[^|]*\bdelete\b[^|]*shadow/i, why: 'deletes volume shadow copies (ransomware)' },
+  { re: /\bnet\s+localgroup\s+admin\w*\b[^|]*\/add/i, why: 'adds a backdoor admin account' },
+  { re: /\bdocker\s+run\b[^|]*-v\s+\/:(?:\/|\s|$)/i, why: 'mounts host root into container (escape)' },
+  { re: /\bnsenter\b[^|]*--target\s+1\b/i, why: 'namespace escape to host (nsenter)' },
+  { re: /\b(?:env|printenv|set)\b\s*\|\s*(?:curl|wget|nc|ncat)\b/i, why: 'pipes environment to the network (exfil)' },
+  { re: /\b(?:nslookup|dig|host)\b[^|]*\$\([^)]*(?:cat|base64|whoami|hostname|env|printenv)/i, why: 'DNS exfiltration' },
 ];
 export const RED_SHELL = [
   { re: /\bsudo\b/i, why: 'privilege escalation' },
-  { re: /\brm\s+\S/i, why: 'file deletion' },
+  { re: /(?<![-\w])rm\s+\S/i, why: 'file deletion' },
   { re: /\bgit\s+push\b/i, why: 'outward-facing: pushes code' },
   { re: /\b(npm|pnpm|yarn|pip|apt|brew|choco)\s+(i|install|add)\b/i, why: 'installs packages (supply-chain)' },
   { re: /\b(kill|pkill|taskkill)\b/i, why: 'kills processes' },
@@ -39,6 +48,10 @@ export const RED_SHELL = [
   { re: /\b(?:kubectl\s+delete|terraform\s+destroy|aws\s+s3\s+rm\b[^|]*--recursive|docker\s+(?:rm|rmi)\s+-f|helm\s+(?:delete|uninstall))\b/i, why: 'destructive infrastructure operation' },
   { re: /\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b/i, why: 'destructive database operation' },
   { re: /\b(?:scp|rsync)\b[^|]*\S+@\S+:/i, why: 'remote file transfer' },
+  { re: /\bdocker\s+run\b[^|]*--(?:privileged|pid[= ]host|net[= ]host|cap-add[= ]?SYS_ADMIN)/i, why: 'privileged / host-namespace container' },
+  { re: /\bmount\b\s+\/dev\//i, why: 'mounts a block device' },
+  { re: /\bnet\s+user\b[^|]*\/add/i, why: 'creates a user account' },
+  { re: /\bwmic\b[^|]*process[^|]*call\s+create|\bInvoke-WmiMethod\b/i, why: 'WMI process creation' },
 ];
 export const YELLOW_SHELL = [
   { re: /\b(mkdir|touch|mv|cp)\b/i, why: 'reversible filesystem change' },

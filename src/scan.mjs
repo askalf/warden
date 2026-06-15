@@ -17,6 +17,9 @@ export const INJECTION_RE = [
   { re: /disregard[^.]{0,20}(?:safety|guardrail|policy)/i, why: 'safety-bypass instruction' },
   { re: /base64\s+-d\s*\|\s*(?:ba)?sh/i, why: 'obfuscated payload to shell' },
   { re: /send\s+(?:all\s+|the\s+)?(?:files|secrets|env|credentials|keys)[^.]{0,40}(?:https?|webhook|curl)/i, why: 'data-exfil instruction' },
+  { re: /reveal\s+(?:all\s+|the\s+|your\s+)?(?:secrets|system\s+prompt|prompt|api\s+keys|credentials)/i, why: 'system-prompt/secret extraction' },
+  { re: /disregard\s+(?:all\s+|the\s+|your\s+)?(?:system\s+)?(?:prompt|instructions|rules)/i, why: 'instruction-override' },
+  { re: /you\s+are\s+now\s+(?:in\s+)?(?:a\s+)?(?:developer|dan|jailbreak|god|unrestricted)\s*-?\s*mode/i, why: 'jailbreak persona' },
 ];
 export const URL_RE = /https?:\/\/([^\/\s'"]+)/gi;
 
