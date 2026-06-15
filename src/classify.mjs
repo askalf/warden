@@ -19,6 +19,14 @@ export const BLACK_SHELL = [
   { re: /\/dev\/tcp\//i, why: 'reverse shell (/dev/tcp)' },
   { re: /\bnc\b[^|]*\s-[a-z]*e\b/i, why: 'netcat exec (reverse shell)' },
   { re: /\beval\b[^|]*\$\(\s*(?:curl|wget)\b/i, why: 'eval of remote download (RCE)' },
+  { re: /\bbase64\b[^|]*(?:-d|--decode)[^|]*\|\s*(?:ba)?sh\b/i, why: 'base64-decode piped to shell (obfuscated RCE)' },
+  { re: /\b(?:python[0-9.]*|perl|ruby|php)\b\s+-[ce]\b(?=[^|]*\b(?:socket|fsockopen)\b)(?=[^|]*\b(?:connect|subprocess|exec|system|pty|\/bin\/(?:ba)?sh)\b)/i, why: 'interpreter reverse shell' },
+  { re: /\b(?:iptables\s+-F|ufw\s+disable|setenforce\s+0)\b/i, why: 'disables host firewall/SELinux' },
+  { re: /(?:Set|Add)-MpPreference[^|]*-(?:Disable\w+|ExclusionPath)/i, why: 'disables/evades Microsoft Defender' },
+  { re: /\|\s*crontab\b/i, why: 'installs a crontab (persistence)' },
+  { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\becho\b|install)[^|]*authorized_keys/i, why: 'writes an SSH backdoor (authorized_keys)' },
+  { re: /(?:>>?|tee\b|\bcp\b|\bmv\b)[^|]*[\\/]etc[\\/](?:cron|systemd)/i, why: 'writes a persistence unit (cron/systemd)' },
+  { re: /\b(?:tar|cat|cp|zip|gzip|scp|rsync)\b[^|]*(?:\.ssh|id_rsa|\.aws|\.env\b|authorized_keys|credentials)[^|]*(?:\||@\S+:|\b(?:nc|ncat|curl|wget)\b)/i, why: 'exfiltrate sensitive files' },
 ];
 export const RED_SHELL = [
   { re: /\bsudo\b/i, why: 'privilege escalation' },
@@ -27,6 +35,9 @@ export const RED_SHELL = [
   { re: /\b(npm|pnpm|yarn|pip|apt|brew|choco)\s+(i|install|add)\b/i, why: 'installs packages (supply-chain)' },
   { re: /\b(kill|pkill|taskkill)\b/i, why: 'kills processes' },
   { re: /\b(systemctl|service)\s+(stop|disable|mask)\b/i, why: 'disables services' },
+  { re: /\b(?:kubectl\s+delete|terraform\s+destroy|aws\s+s3\s+rm\b[^|]*--recursive|docker\s+(?:rm|rmi)\s+-f|helm\s+(?:delete|uninstall))\b/i, why: 'destructive infrastructure operation' },
+  { re: /\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b/i, why: 'destructive database operation' },
+  { re: /\b(?:scp|rsync)\b[^|]*\S+@\S+:/i, why: 'remote file transfer' },
 ];
 export const YELLOW_SHELL = [
   { re: /\b(mkdir|touch|mv|cp)\b/i, why: 'reversible filesystem change' },

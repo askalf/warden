@@ -1,6 +1,6 @@
 // warden — own your agent security. A guard between an agent and its tools.
 import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
-import { scanSecrets, injectionHits, isExternal } from './scan.mjs';
+import { scanSecrets, injectionHits, isExternal, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
 import { matchRule, DEFAULT_POLICY, loadPolicy } from './policy.mjs';
 import { AuditLog } from './audit.mjs';
 
@@ -33,6 +33,10 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   if (injSkill.length) { tier = TIER.BLACK; why.push(...injSkill.map((f) => '☠ poisoned-skill: ' + f)); }
   const injInput = injectionHits(JSON.stringify(action.input || {}));
   if (injInput.length) { const it = active ? TIER.BLACK : TIER.RED; tier = worst(tier, it); why.push(...injInput.map((f) => (active ? '☠' : '⚠') + ' injection: ' + f)); }
+  // cloud-metadata SSRF (steals instance credentials) — only meaningful for tools that fetch/exec.
+  if (active && METADATA_RE.test(JSON.stringify(action.input || {}))) { tier = TIER.BLACK; why.push('☠ cloud-metadata SSRF (credential theft)'); }
+  // persistence/backdoor: writing into a known persistence location.
+  if (WRITE.includes(tool) && PERSISTENCE_PATH_RE.test(action.input?.path || '')) { tier = TIER.BLACK; why.push('☠ persistence target: ' + (action.input?.path || '')); }
   if (NET.includes(tool) && externalHosts.length && egressAllow.length) {
     tier = worst(tier, TIER.RED);
     why.push('⚠ egress to non-allowlisted host(s): ' + externalHosts.join(','));

@@ -8,7 +8,9 @@ export const SECRET_RE = [
   { re: /xox[baprs]-[A-Za-z0-9-]{10,}/, why: 'Slack token' },
 ];
 export const SECRET_ENV_RE = /\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)\w*\}?/i;
-export const SENSITIVE_PATH_RE = /(\.env\b|\.aws[\\/]credentials|\.ssh[\\/]id_|\.npmrc|credentials\.json|\.git-credentials|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/])/i;
+export const SENSITIVE_PATH_RE = /(\.env\b|\.aws[\\/]|\.ssh[\\/]|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/])/i;
+export const METADATA_RE = /\b(?:169\.254\.169\.254|metadata\.google\.internal|metadata\.azure\.com|fd00:ec2::254|100\.100\.100\.200)\b/i;
+export const PERSISTENCE_PATH_RE = /(authorized_keys|[\\/]etc[\\/]cron|[\\/]etc[\\/]systemd[\\/]system|CurrentVersion[\\/]+Run|[\\/]Startup[\\/])/i;
 export const INJECTION_RE = [
   { re: /ignore\s+(?:all\s+|the\s+|your\s+)?(?:previous|prior|above)\s+(?:instructions|rules|prompt)/i, why: 'instruction-override' },
   { re: /\b(?:exfiltrate|leak|steal)\b/i, why: 'exfiltration intent' },
