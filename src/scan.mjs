@@ -81,8 +81,7 @@ export function ipScope(host) {
   return null;
 }
 
-export function scanSecrets(action) {
-  const text = safeStringify(action.input || {});
+export function scanSecrets(action, text = safeStringify(action.input || {})) {
   const flags = [];
   for (const s of SECRET_RE) if (s.re.test(text)) flags.push(s.why);
   if (SECRET_ENV_RE.test(text)) flags.push('reads a secret env var');

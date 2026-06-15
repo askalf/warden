@@ -11,7 +11,8 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   const { allow = [], deny = [], egressAllow = [], writeRoots = null } = policy;
   const tool = (action.tool || '').toLowerCase();
   const base = classify(action);
-  const secrets = scanSecrets(action);
+  const inputStr = safeStringify(action.input || {}); // computed once, reused by scanSecrets + injection/SSRF below
+  const secrets = scanSecrets(action, inputStr);
   let tier = base.tier;
   const why = [...base.why];
 
@@ -36,7 +37,6 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   // previous instructions"` or `grep "you are now in developer mode"` is benign;
   // shell threats are the classifier's job. Scanning command text for injection
   // English only false-blocks legitimate work, so skip it for shell tools.
-  const inputStr = safeStringify(action.input || {});
   const injInput = SHELL.includes(tool) ? [] : injectionHits(inputStr);
   if (injInput.length) { const it = active ? TIER.BLACK : TIER.RED; tier = worst(tier, it); why.push(...injInput.map((f) => (active ? '☠' : '⚠') + ' injection: ' + f)); }
   // SSRF — only meaningful for tools that fetch/exec. Cloud-metadata hosts and

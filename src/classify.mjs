@@ -10,7 +10,10 @@ export const WRITE = ['write', 'edit', 'create', 'append', 'notebookedit'];
 export const READONLY = ['read', 'get', 'list', 'ls', 'grep', 'glob', 'status', 'stat'];
 
 export const BLACK_SHELL = [
-  { re: /\brm\s+-[a-z]*r[a-z]*f?\b[^|]*?(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete of root/home/system/glob' },
+  // bounded quantifiers (no adjacent `[a-z]*r[a-z]*`, no unbounded lazy gap) so a
+  // long flag run like `rm -rrr…` can't trigger quadratic backtracking (ReDoS):
+  // find a dash-flag containing r (recursive) then a catastrophic target nearby.
+  { re: /\brm\s+[^|]{0,40}?-(?=[a-z]{0,12}r)[a-z]{1,12}\b[^|]{0,200}?(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete of root/home/system/glob' },
   { re: /\bmkfs(\.\w+)?\b/i, why: 'format filesystem' },
   { re: /\bdd\b[^|]*\bof=\/dev\/(sd|nvme|disk)/i, why: 'raw disk overwrite' },
   { re: /:\(\)\s*\{\s*:\s*\|\s*:?\s*&\s*\}\s*;\s*:/, why: 'fork bomb' },
