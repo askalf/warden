@@ -4,3 +4,8 @@ warden-audit.jsonl
 warden.config.json
 .DS_Store
 dist/
+
+# native fast-hook build artifacts (per-platform; ship via GitHub Releases)
+native/warden-fast
+native/warden-fast.exe
+native/warden-fast-*

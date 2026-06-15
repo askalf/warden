@@ -10,6 +10,17 @@ export function wardenSocket() {
 }
 
 /**
+ * Discovery file the daemon writes (0600) with its loopback fast-hook port + pid.
+ * The native client (warden-fast) reads this to find the daemon — same path on
+ * every platform, so the compiled binary needs zero platform-specific logic.
+ */
+export function wardenInfoFile() {
+  if (process.env.WARDEN_INFO) return process.env.WARDEN_INFO;
+  const home = process.env.USERPROFILE || process.env.HOME || os.homedir();
+  return path.join(home, '.warden', 'daemon.json');
+}
+
+/**
  * Send one { action, skillText } to the daemon and resolve its verdict.
  * Resolves null on ANY failure (no daemon, timeout, bad reply) so the caller
  * can fall back to an in-process check.

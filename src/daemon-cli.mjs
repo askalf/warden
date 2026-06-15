@@ -10,5 +10,5 @@ const HOME = process.env.USERPROFILE || process.env.HOME || os.homedir();
 const configPath = process.env.WARDEN_CONFIG || path.join(HOME, '.warden', 'config.json');
 const auditPath = process.env.WARDEN_AUDIT || path.join(HOME, '.warden', 'audit.jsonl');
 
-startDaemon({ configPath, auditPath, onLog: (m) => process.stderr.write('[warden] ' + m + '\n') });
-process.stderr.write('[warden] serve on ' + wardenSocket() + ' — Ctrl-C to stop\n');
+startDaemon({ configPath, auditPath, tcp: true, onLog: (m) => process.stderr.write('[warden] ' + m + '\n') });
+process.stderr.write('[warden] serve on ' + wardenSocket() + ' (+ loopback fast-hook) — Ctrl-C to stop\n');
