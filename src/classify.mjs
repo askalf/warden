@@ -22,7 +22,7 @@ export const BLACK_SHELL = [
 ];
 export const RED_SHELL = [
   { re: /\bsudo\b/i, why: 'privilege escalation' },
-  { re: /\brm\s+-[a-z]*\b/i, why: 'file deletion' },
+  { re: /\brm\s+\S/i, why: 'file deletion' },
   { re: /\bgit\s+push\b/i, why: 'outward-facing: pushes code' },
   { re: /\b(npm|pnpm|yarn|pip|apt|brew|choco)\s+(i|install|add)\b/i, why: 'installs packages (supply-chain)' },
   { re: /\b(kill|pkill|taskkill)\b/i, why: 'kills processes' },

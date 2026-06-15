@@ -17,7 +17,8 @@
   "scripts": {
     "test": "node --test",
     "demo": "node demo/demo.mjs",
-    "smoke": "node demo/mcp-smoke.mjs"
+    "smoke": "node demo/mcp-smoke.mjs",
+    "bench": "node bench/run.mjs"
   },
   "keywords": ["agent", "security", "mcp", "llm", "guardrails", "ai-safety", "firewall", "own-your-stack"],
   "author": "Thomas Sprayberry",
