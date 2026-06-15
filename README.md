@@ -10,11 +10,11 @@ It sits between an agent and its tools, and on every action it:
 - **enforces policy** — allow/deny rules, egress allowlist, write-path scoping
 - **catches secret exfil** — a secret + an external destination in the same call → blocked
 - **catches prompt-injection / poisoned skills** — instruction-override and exfil instructions in tool args *or* skill text
-- **writes a tamper-evident audit** — hash-chained, so rewriting a past verdict breaks `verify()`
+- **writes a tamper-evident audit** — every verdict is hash-chained *to disk*, so editing a past entry is caught by `verifyAuditFile()`
 
 Deterministic and offline by default (zero runtime deps). An optional **LLM judge tier** refines gray-zone calls — and it can only *raise* risk, never lower a block.
 
-Coverage is **measured, not assumed**: `npm run bench` scores a labeled corpus (80 samples across 8 attack families — RCE, destruction, exfil, SSRF, persistence, security-disabling, container escape, prompt-injection) and reports catch-rate + false-positive rate. Currently **100% catch, 0% false positives**. Threat model: [SECURITY.md](SECURITY.md).
+Coverage is **measured, not assumed**: `npm run bench` scores a 234-sample labeled corpus across 19 attack families (RCE, destruction, exfil, SSRF, persistence, security-disabling, container escape, prompt-injection, argument-injection, …) and reports recall + false-positive rate. Today: **96% deterministic recall, 100% precision (zero false positives)**. The remaining ~4% is the *evasion bucket* — `X=rm; $X`, `${IFS}` padding, hex/base64-encoded payloads that a regex can't safely deobfuscate — which warden deterministically routes to the optional [LLM judge](#optional-llm-judge) instead of guessing. Three adversarial batteries (`bench/edgecases.mjs`, `bench/stress.mjs`, `bench/stress2.mjs`) and a ReDoS guard (`bench/redos.mjs` — every pattern under 1ms at the 16 KB input cap) keep it honest. Threat model: [SECURITY.md](SECURITY.md).
 
 ## Quick start
 
@@ -85,7 +85,7 @@ warden-serve                                                      # run the daem
 
 ## Daemon (optional)
 
-`warden-serve` runs a long-lived process that loads the classifier + policy once, keeps a persistent hash-chained audit, hot-reloads policy on change, and can host the judge tier. The Claude Code hook tries the daemon first and **falls back to in-process** if it isn't running, so nothing breaks either way. (It offloads classification CPU + centralizes audit; on its own it does not eliminate node's per-call process-startup cost — that's what the native fast hook below is for.)
+`warden-serve` runs a long-lived process that loads the classifier + policy once, streams a hash-chained audit straight to disk, hot-reloads policy on change, and can host the judge tier. It's reachable only with a **capability token** published into a `0600` file — so only your user can talk to it, closing local-process abuse of the judge tier and audit. The Claude Code hook tries the daemon first and **falls back to in-process** if it isn't running (or can't authenticate), so screening always happens and nothing breaks either way — fail-safe, never fail-open. (It offloads classification CPU + centralizes audit; on its own it does not eliminate node's per-call process-startup cost — that's what the native fast hook below is for.)
 
 ## Native fast hook
 

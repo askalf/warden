@@ -23,6 +23,8 @@
     "smoke": "node demo/mcp-smoke.mjs",
     "smoke:native": "node native/smoke.mjs",
     "bench": "node bench/run.mjs",
+    "bench:redos": "node bench/redos.mjs",
+    "bench:stress": "node bench/stress.mjs && node bench/stress2.mjs && node bench/edgecases.mjs",
     "bench:native": "node native/bench.mjs"
   },
   "keywords": ["agent", "security", "mcp", "llm", "guardrails", "ai-safety", "firewall", "own-your-stack"],
