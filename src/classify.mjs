@@ -68,6 +68,9 @@ export const BLACK_SHELL = [
   { re: /\bgit\b[^|]*\s-c\s+(?:core\.(?:sshCommand|pager|fsmonitor|hooksPath)|gpg\.program)\s*=/i, why: 'git -c config-override RCE' },
   { re: /\bgit\s+config\b[^|]*\bcore\.(?:sshCommand|fsmonitor|pager|hooksPath)\b/i, why: 'git config core.* RCE override' },
   { re: /\bgit\b[^|]*\bext::/i, why: 'git ext:: transport RCE' },
+  { re: /\bgit\b[^|]*--(?:upload-pack|receive-pack)[=\s]/i, why: 'git --upload-pack/--receive-pack RCE' },
+  // exec-via-flag: tar runs a command on every checkpoint
+  { re: /\btar\b[^|]*--checkpoint-action[=\s]*[^|]*\bexec/i, why: 'tar --checkpoint-action=exec (RCE)' },
   // --- reverse shells (more) ---
   { re: /\bsocat\b[^|]*\bEXEC:/i, why: 'socat reverse shell (EXEC)' },
   { re: /\bmkfifo\b[\s\S]*\|\s*n(?:c|cat)\b/i, why: 'named-pipe reverse shell (mkfifo|nc)' },
@@ -112,6 +115,7 @@ export const RED_SHELL = [
   { re: /\b(systemctl|service)\s+(stop|disable|mask)\b/i, why: 'disables services' },
   { re: /\b(?:kubectl\s+delete|terraform\s+destroy|aws\s+s3\s+rm\b[^|]*--recursive|docker\s+(?:rm|rmi)\s+-f|helm\s+(?:delete|uninstall))\b/i, why: 'destructive infrastructure operation' },
   { re: /\bterraform\s+apply\b/i, why: 'applies infrastructure changes (terraform)' },
+  { re: /\bLD_PRELOAD\s*=\s*\S/i, why: 'LD_PRELOAD library injection' },
   { re: /\bgit\s+clean\b[^|]*\s-[a-z]*[fx]/i, why: 'git clean removes untracked/ignored files (irreversible)' },
   { re: /\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b/i, why: 'destructive database operation' },
   { re: /\b(?:scp|rsync)\b[^|]*\S+@\S+:/i, why: 'remote file transfer' },

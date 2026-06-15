@@ -12,7 +12,10 @@ export const SENSITIVE_PATH_RE = /(\.env\b|\.aws[\\/]|\.ssh[\\/]|\.npmrc|credent
 // Cloud-instance-metadata hosts, incl. the common numeric encodings of the AWS
 // IMDS IP (169.254.169.254 → decimal/hex/octal) used to evade literal matching.
 export const METADATA_RE = /\b(?:169\.254\.169\.254|2852039166|0xa9fea9fe|0251\.0376\.0251\.0376|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200)\b|\[?(?:fd00:ec2::254|::ffff:a9fe:a9fe)\]?/i;
-export const PERSISTENCE_PATH_RE = /(authorized_keys|[\\/]etc[\\/]cron|[\\/]etc[\\/]systemd[\\/]system|CurrentVersion[\\/]+Run|[\\/]Startup[\\/])/i;
+// Writing into any of these via the write tool is persistence/escalation —
+// kept in lockstep with the shell-side persistence patterns so a backdoor
+// dropped via `write` is caught the same as `echo >> ~/.bashrc`.
+export const PERSISTENCE_PATH_RE = /(authorized_keys|[\\/]etc[\\/](?:cron|systemd[\\/]system|sudoers|ld\.so\.preload|rc\.local|init\.d|profile\.d)|CurrentVersion[\\/]+Run|Image\s+File\s+Execution|[\\/]Startup[\\/]|[\\/]\.(?:bashrc|bash_profile|bash_login|zshrc|zshenv|zprofile|profile|kshrc|cshrc)(?:["'\s]|$)|[\\/]\.config[\\/]autostart[\\/])/i;
 export const INJECTION_RE = [
   { re: /ignore\s+(?:all\s+|the\s+|your\s+)?(?:previous|prior|above)\s+(?:instructions|rules|prompt)/i, why: 'instruction-override' },
   { re: /\b(?:exfiltrate|leak|steal)\b/i, why: 'exfiltration intent' },
