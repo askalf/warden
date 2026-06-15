@@ -27,6 +27,7 @@ export const BLACK_SHELL = [
   { re: /\|\s*crontab\b/i, why: 'installs a crontab (persistence)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\becho\b|install)[^|]*authorized_keys/i, why: 'writes an SSH backdoor (authorized_keys)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\binstall\b|\becho\b)[^|]*[\\/]etc[\\/](?:cron|systemd|ld\.so\.preload|sudoers|rc\.local|init\.d|profile\.d)/i, why: 'writes a persistence/escalation file (cron/systemd/sudoers/ld.so.preload)' },
+  { re: /(?:>>?|tee\b|\bcp\b|\bmv\b)[^|]*[\\/]\.(?:bashrc|bash_profile|bash_login|zshrc|zshenv|zprofile|profile|kshrc|cshrc)\b/i, why: 'writes a shell rc/profile (login persistence)' },
   { re: /\b(?:tar|cat|cp|zip|gzip|dd)\b[^|]*(?:\.ssh|id_rsa|id_ed25519|\.aws|\.env\b|authorized_keys|credentials)[^|]*\|\s*(?:nc|ncat|curl|wget|socat)\b/i, why: 'pipe sensitive files to the network (exfil)' },
   // linear (no nested quantifier → no ReDoS); [^|@]*? before the secret means no
   // earlier @host: dest, and the secret must sit immediately before the dest —
@@ -126,19 +127,26 @@ export function classify(action) {
   const why = [];
   let tier = TIER.GREEN;
 
-  if (SHELL.includes(tool)) {
-    const raw = input.command ?? input.cmd;
+  // Run the shell ruleset for shell tools AND for any non-write tool that carries
+  // a command/cmd field — so a poisoned tool that declares `read` but ships a
+  // shell command can't slip past (tool-name spoofing). Write content is data,
+  // handled separately, so it's excluded.
+  const cmdField = input.command ?? input.cmd;
+  if (SHELL.includes(tool) || (cmdField != null && !WRITE.includes(tool))) {
     // non-string command must NOT coerce to "[object Object]"/"rm,-rf,/" (silent
-    // green bypass). Join argv arrays with spaces so a split command is visible;
-    // stringify other shapes so nested dangerous strings stay visible.
-    const cmd = typeof raw === 'string' ? raw
-      : Array.isArray(raw) ? raw.map(String).join(' ')
+    // green bypass). Join argv arrays so a split command is visible; stringify
+    // other shapes so nested dangerous strings stay visible.
+    let cmd = typeof cmdField === 'string' ? cmdField
+      : Array.isArray(cmdField) ? cmdField.map(String).join(' ')
       : safeStringify(input);
+    // defeat fullwidth/homoglyph evasion (NFKC maps ＲＭ → RM, etc.)
+    cmd = cmd.normalize('NFKC');
     if (cmd.length > 16384) { why.push('⚠ oversized command (' + cmd.length + 'B) — gated for review'); return { tier: TIER.RED, why }; }
+    if (!SHELL.includes(tool)) why.push('⚠ shell-command field on a non-shell tool (' + (tool || 'unknown') + ')');
     for (const p of BLACK_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
     for (const p of RED_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.RED); why.push('⚠ ' + p.why); }
     for (const p of YELLOW_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.YELLOW); why.push('· ' + p.why); }
-    if (tier === TIER.GREEN) why.push('· read-only shell');
+    if (tier === TIER.GREEN) why.push(SHELL.includes(tool) ? '· read-only shell' : '· command field — read-only');
   } else if (WRITE.includes(tool)) {
     tier = TIER.YELLOW; why.push('· file write (reversible)');
   } else if (['delete', 'rm', 'unlink'].includes(tool)) {
