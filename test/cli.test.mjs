@@ -17,6 +17,12 @@ test('queryAudit summarizes and filters', () => {
   assert.equal(queryAudit(lines, { tail: 1 }).rows.length, 1);
 });
 
+test('queryAudit normalizes the legacy "kind" field to a decision', () => {
+  const lines = [{ tier: 'black', kind: 'deny', tool: 'shell' }, { tier: 'green', kind: 'defer', tool: 'read' }];
+  assert.equal(queryAudit(lines, { blocksOnly: true }).shown, 1);
+  assert.equal(queryAudit(lines).byDecision.block, 1);
+});
+
 test('buildInitPolicy returns a valid policy shape', () => {
   const p = buildInitPolicy(process.cwd()); // the warden repo
   assert.ok(Array.isArray(p.egressAllow) && p.egressAllow.includes('api.anthropic.com'));

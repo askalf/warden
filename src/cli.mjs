@@ -22,8 +22,10 @@ export function buildInitPolicy(cwd = process.cwd()) {
 }
 
 /** Summarize + filter parsed audit-log rows. */
+const KIND2DECISION = { deny: 'block', ask: 'approve', defer: 'allow' };
 export function queryAudit(lines, { tier = null, blocksOnly = false, tail = 0 } = {}) {
-  let rows = lines;
+  // tolerate both the current `decision` field and the legacy `kind` field.
+  let rows = lines.map((r) => ({ ...r, decision: r.decision || KIND2DECISION[r.kind] || r.kind || 'unknown' }));
   if (tier) rows = rows.filter((r) => r.tier === tier);
   if (blocksOnly) rows = rows.filter((r) => r.decision === 'block');
   if (tail) rows = rows.slice(-tail);
