@@ -14,7 +14,7 @@ const actions = [
   { label: 'read a file', tool: 'read', input: { path: 'package.json' } },
   { label: 'run unit tests', tool: 'shell', input: { command: 'npm run test:unit' } },
   { label: 'edit a source file', tool: 'write', input: { path: 'src/index.ts', content: '...' } },
-  { label: 'GET an allowed host', tool: 'fetch', input: { url: 'https://api.github.com/repos/askalf/dario', method: 'GET' } },
+  { label: 'GET an allowed host', tool: 'fetch', input: { url: 'https://api.github.com/repos/askalf/warden', method: 'GET' } },
   { label: 'write OUTSIDE allowed roots', tool: 'write', input: { path: '/etc/cron.d/backdoor', content: '* * * * * root ...' } },
   { label: 'git push (outward-facing)', tool: 'shell', input: { command: 'git push origin main' } },
   { label: 'install a package', tool: 'shell', input: { command: 'npm install left-pad-evil' } },

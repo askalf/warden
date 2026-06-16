@@ -69,7 +69,7 @@ Point your MCP client (Claude Code, Claude Desktop, …) at `warden-mcp` instead
 import { checkAsync } from '@askalf/warden';
 import { makeJudge } from '@askalf/warden/judge';
 
-const judge = makeJudge({ endpoint: 'http://localhost:3456' }); // routes through dario → your subscription
+const judge = makeJudge({ endpoint: 'https://api.anthropic.com' }); // or your own Anthropic-compatible gateway
 const v = await checkAsync(action, policy, { judge });
 ```
 

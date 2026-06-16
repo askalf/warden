@@ -5,7 +5,7 @@ import { stubJudge, makeJudge } from '../src/judge.mjs';
 
 test('makeJudge reads the verdict past a thinking block (multi-content)', async () => {
   const orig = globalThis.fetch;
-  // dario-style response: a thinking block FIRST, then the JSON text block.
+  // extended-thinking response: a thinking block FIRST, then the JSON text block.
   globalThis.fetch = async () => ({ json: async () => ({ content: [{ type: 'thinking', thinking: 'X=rm so $X is rm…' }, { type: 'text', text: '{"tier":"black","reason":"deobfuscates to rm -rf /"}' }] }) });
   try {
     const j = makeJudge({ endpoint: 'http://stub' });

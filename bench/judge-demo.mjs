@@ -2,7 +2,7 @@
 // commands the deterministic regex deliberately does not block (catching them
 // with patterns would overfit). The obfuscation router flags them gray; the LLM
 // judge deobfuscates and blocks. Needs a live Anthropic-compatible endpoint:
-//   WARDEN_JUDGE_ENDPOINT=http://localhost:3456 node bench/judge-demo.mjs
+//   WARDEN_JUDGE_ENDPOINT=https://api.anthropic.com WARDEN_JUDGE_KEY=sk-ant-… node bench/judge-demo.mjs
 import { check, checkAsync } from '../src/index.mjs';
 import { makeJudge } from '../src/judge.mjs';
 
@@ -16,9 +16,9 @@ const EVASIONS = [
 const BENIGN = ['ls -la', 'docker run --rm -v $(pwd):/app node npm ci'];
 
 const judge = makeJudge({
-  endpoint: process.env.WARDEN_JUDGE_ENDPOINT || 'http://localhost:3456',
+  endpoint: process.env.WARDEN_JUDGE_ENDPOINT || 'https://api.anthropic.com',
   model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-4-6',
-  apiKey: process.env.WARDEN_JUDGE_KEY || process.env.DARIO_API_KEY || 'dario',
+  apiKey: process.env.WARDEN_JUDGE_KEY || process.env.ANTHROPIC_API_KEY,
 });
 
 const pad = (s, n) => (s + ' '.repeat(n)).slice(0, n);

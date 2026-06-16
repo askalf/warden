@@ -12,14 +12,15 @@ const HOME = process.env.USERPROFILE || process.env.HOME || os.homedir();
 const configPath = process.env.WARDEN_CONFIG || path.join(HOME, '.warden', 'config.json');
 const auditPath = process.env.WARDEN_AUDIT || path.join(HOME, '.warden', 'audit.jsonl');
 
-// Opt-in LLM judge tier: set WARDEN_JUDGE_ENDPOINT (e.g. an in-stack dario) to
-// have the daemon deobfuscate gray-zone / evasion-bucket commands. No endpoint
-// -> deterministic only (unchanged). Catches the regex-evasion the gate can't.
+// Opt-in LLM judge tier: set WARDEN_JUDGE_ENDPOINT (any Anthropic-compatible
+// endpoint or gateway) to have the daemon deobfuscate gray-zone / evasion-bucket
+// commands. No endpoint -> deterministic only (unchanged). Catches regex-evasion
+// the gate can't.
 const judge = process.env.WARDEN_JUDGE_ENDPOINT
   ? makeJudge({
       endpoint: process.env.WARDEN_JUDGE_ENDPOINT,
       model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-4-6',
-      apiKey: process.env.WARDEN_JUDGE_KEY || process.env.DARIO_API_KEY || 'dario',
+      apiKey: process.env.WARDEN_JUDGE_KEY || process.env.ANTHROPIC_API_KEY,
     })
   : null;
 

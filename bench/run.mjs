@@ -8,13 +8,13 @@ import { SAMPLES } from './corpus.mjs';
 const policy = { egressAllow: ['api.example.com'], writeRoots: ['src/', 'docs/'] };
 
 // `--judge` consults the LLM judge for gray-zone samples (incl. the obfuscation
-// router's evasion cases). Endpoint defaults to dario; override via env.
+// router's evasion cases). Endpoint defaults to the Anthropic API; override via env.
 const useJudge = process.argv.includes('--judge');
 const judge = useJudge
   ? makeJudge({
-      endpoint: process.env.WARDEN_JUDGE_ENDPOINT || 'http://localhost:3456',
+      endpoint: process.env.WARDEN_JUDGE_ENDPOINT || 'https://api.anthropic.com',
       model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-4-6',
-      apiKey: process.env.WARDEN_JUDGE_KEY || process.env.DARIO_API_KEY || 'dario',
+      apiKey: process.env.WARDEN_JUDGE_KEY || process.env.ANTHROPIC_API_KEY,
     })
   : null;
 const verdict = (s) => (judge ? checkAsync(s.action, policy, { skillText: s.skill || '', judge }) : check(s.action, policy, { skillText: s.skill || '' }));
