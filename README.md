@@ -100,5 +100,9 @@ npm run demo   # feeds it OpenClaw-class attacks + benign ops
 npm test       # node --test
 ```
 
+## The agent-security stack
+
+Three composable layers, one defense: **[warden](https://github.com/askalf/warden)** contains the call *(you are here)* · **[canon](https://github.com/askalf/canon)** vets the tool · **[keeper](https://github.com/askalf/keeper)** holds the keys. Run all three together → **[agent-security-stack](https://github.com/askalf/agent-security-stack)**.
+
 ---
 Part of **[Own Your Stack](https://github.com/askalf)** — own your AI infrastructure instead of renting it. Built by Thomas Sprayberry.
