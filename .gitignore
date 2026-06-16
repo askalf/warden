@@ -1,5 +1,6 @@
 node_modules/
 *.log
+*.tmp
 warden-audit.jsonl
 warden.config.json
 .DS_Store
