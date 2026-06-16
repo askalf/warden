@@ -28,6 +28,7 @@
     "bench:redos": "node bench/redos.mjs",
     "bench:stress": "node bench/stress.mjs && node bench/stress2.mjs && node bench/edgecases.mjs",
     "bench:mcp": "node bench/mcp-redteam.mjs",
+    "bench:max": "node bench/maxstress.mjs",
     "bench:native": "node native/bench.mjs"
   },
   "keywords": ["agent", "security", "mcp", "llm", "guardrails", "ai-safety", "firewall", "own-your-stack"],

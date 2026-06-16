@@ -33,5 +33,12 @@ First public release on npm — own your agent security.
   a local decision server with a low-latency client for hot paths.
 - **Optional LLM judge tier** (`@askalf/warden/judge`) — escalates only genuine
   gray-zone actions; the deterministic core decides everything else.
+- **Fail-safe contract** — every entrypoint returns a verdict, never throws into
+  the host: a null/non-object action, a non-string `tool`/`method`, a circular
+  input, or a Symbol buried in a command/path/url array all classify safely
+  instead of raising. The scanned text is bounded (64KB) so a giant input field
+  can't turn a call into a heavy scan. Fuzzed at 2M malformed inputs with zero
+  throws / zero invalid verdicts (`npm run bench:max`), worst-case regex timing
+  under 50ms at 300KB, ~60k verdicts/sec (p99 ~60µs).
 
 [0.2.0]: https://github.com/askalf/warden/releases/tag/v0.2.0

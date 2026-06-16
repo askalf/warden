@@ -9,7 +9,7 @@ import { scanInjection, injectionHits, safeStringify } from './scan.mjs';
 const netArgs = (a) => ({ url: a.url || a.uri || a.endpoint || a.target || a.href || a.link || '', method: a.method || 'GET', body: a.body || a.data || '' });
 
 const NAME_HINTS = [
-  { re: /(exec|shell|command|run_|terminal|bash|powershell|process|spawn)/i, tool: 'shell', arg: (a) => ({ command: a.command || a.cmd || a.script || JSON.stringify(a) }) },
+  { re: /(exec|shell|command|run_|terminal|bash|powershell|process|spawn)/i, tool: 'shell', arg: (a) => ({ command: a.command || a.cmd || a.script || safeStringify(a) }) },
   { re: /(delete|remove|unlink|rmdir)/i, tool: 'delete', arg: (a) => ({ path: a.path || a.target || '' }) },
   { re: /(write|edit|create|append|put_file|save|patch)/i, tool: 'write', arg: (a) => ({ path: a.path || a.file || a.uri || '', content: a.content || a.text || '' }) },
   { re: /(fetch|http|request|download|webhook|post|api_call|browse|navigate)/i, tool: 'fetch', arg: netArgs },
@@ -33,17 +33,19 @@ const hasUrlish = (args) => Object.values(args || {}).some((v) => typeof v === '
  *    checks that only run for fetch/shell tools.
  */
 export function mapMcpToAction(name, args = {}, nameMap = {}) {
-  if (nameMap[name]) return { tool: nameMap[name], input: { ...args } };
+  args = args || {};
+  const nameStr = name == null ? '' : String(name); // fail-safe: a non-string name (Symbol/number) must not throw
+  if (nameMap[nameStr]) return { tool: nameMap[nameStr], input: { ...args } };
   const urlish = hasUrlish(args);
   for (const h of NAME_HINTS) {
-    if (h.re.test(name || '')) {
+    if (h.re.test(nameStr)) {
       if (urlish && h.tool !== 'fetch' && h.tool !== 'shell')
         return { tool: 'fetch', input: { ...args, ...netArgs(args) } };
       return { tool: h.tool, input: { ...args, ...h.arg(args) } };
     }
   }
   if (urlish) return { tool: 'fetch', input: { ...args, ...netArgs(args) } };
-  return { tool: name || 'unknown', input: { ...args } }; // classifier treats unknown tools as yellow
+  return { tool: nameStr || 'unknown', input: { ...args } }; // classifier treats unknown tools as yellow
 }
 
 /** Firewall a single MCP `tools/call` request. Returns { verdict, action }. */

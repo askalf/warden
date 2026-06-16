@@ -1,6 +1,7 @@
 // Policy: allow/deny rules + egress allowlist + write roots. Loadable from a
 // .warden.json file (Claude-Code-style rule syntax: `tool(glob)`).
 import fs from 'node:fs';
+import { safeStringify } from './scan.mjs';
 
 export const DEFAULT_POLICY = { allow: [], deny: [], egressAllow: [], writeRoots: null };
 
@@ -9,11 +10,18 @@ export function matchRule(rule, action) {
   const m = /^(\w+)\((.*)\)$/.exec(rule);
   if (!m) return false;
   const [, t, pat] = m;
-  if (t.toLowerCase() !== (action.tool || '').toLowerCase()) return false;
-  const i = action.input || {};
-  const subject = i.command || i.path || i.url || JSON.stringify(i);
+  if (t.toLowerCase() !== String((action && action.tool) || '').toLowerCase()) return false;
+  const i = (action && action.input) || {};
+  const subject = i.command || i.path || i.url || i;
   const re = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
-  return re.test(subject);
+  // Coerce safely: a string is itself; an array (split command) joins via
+  // map(String) — so a Symbol element can't throw; anything else goes through
+  // safeStringify (circular/BigInt/Symbol-safe). A bare String()/test() would
+  // throw on a Symbol or a Symbol-bearing array.
+  const text = typeof subject === 'string' ? subject
+    : Array.isArray(subject) ? subject.map(String).join(' ')
+    : safeStringify(subject);
+  return re.test(text);
 }
 
 /** Merge a .warden.json file over the defaults. Never throws — bad/missing file → defaults. */

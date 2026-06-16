@@ -8,10 +8,19 @@ export { TIER, AuditLog, classify, loadPolicy, matchRule };
 
 /** Deterministic verdict for an action. No I/O, no LLM — pure + offline. */
 export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
-  const { allow = [], deny = [], egressAllow = [], writeRoots = null } = policy;
-  const tool = (action.tool || '').toLowerCase();
+  // Fail safe on malformed input: a null/non-object action or a non-string tool
+  // must yield a verdict, never throw into the host agent.
+  action = action || {};
+  const { allow = [], deny = [], egressAllow = [], writeRoots = null } = policy || {};
+  const tool = String(action.tool || '').toLowerCase();
   const base = classify(action);
-  const inputStr = safeStringify(action.input || {}); // computed once, reused by scanSecrets + injection/SSRF below
+  // Bound the scanned text. Secrets / injection phrases / metadata hosts that
+  // matter appear early, and the classifier already caps the command at 16KB —
+  // so a giant input field can't turn each firewall call into a heavy (linear
+  // but unbounded) scan (a DoS-amplification vector). 64KB is a generous window.
+  const SCAN_CAP = 65536;
+  const fullStr = safeStringify(action.input || {});
+  const inputStr = fullStr.length > SCAN_CAP ? fullStr.slice(0, SCAN_CAP) : fullStr; // reused by scanSecrets + injection/SSRF below
   const secrets = scanSecrets(action, inputStr);
   let tier = base.tier;
   const why = [...base.why];
@@ -51,15 +60,17 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
       tier = worst(tier, TIER.RED); why.push('⚠ http request to an internal/RFC1918 address (SSRF risk)');
     }
   }
-  // persistence/backdoor: writing into a known persistence location.
-  const wpath = String(action.input?.path || '');
+  // persistence/backdoor: writing into a known persistence location. Only a
+  // string path is a real write target; a non-string (Symbol/array/object) path
+  // fails safe to '' rather than throwing on coercion.
+  const wpath = typeof action.input?.path === 'string' ? action.input.path : '';
   if (WRITE.includes(tool) && PERSISTENCE_PATH_RE.test(wpath)) { tier = TIER.BLACK; why.push('☠ persistence target: ' + wpath); }
   if (NET.includes(tool) && externalHosts.length && egressAllow.length) {
     tier = worst(tier, TIER.RED);
     why.push('⚠ egress to non-allowlisted host(s): ' + externalHosts.join(','));
   }
   if (writeRoots && WRITE.includes(tool)) {
-    const p = String(action.input?.path || '');
+    const p = wpath;
     if (p && !writeRoots.some((r) => p.startsWith(r))) {
       tier = worst(tier, TIER.RED);
       why.push('⚠ write outside allowed roots: ' + p);
@@ -73,7 +84,8 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   let smells = [];
   if (SHELL.includes(tool) && tier !== TIER.BLACK) {
     const c = action.input?.command ?? action.input?.cmd;
-    smells = obfuscationHits(typeof c === 'string' ? c : inputStr);
+    const ctext = typeof c === 'string' ? c : inputStr;
+    smells = obfuscationHits(ctext.length > SCAN_CAP ? ctext.slice(0, SCAN_CAP) : ctext);
     if (smells.length) why.push(...smells.map((f) => '· obfuscation smell → judge: ' + f));
   }
 
