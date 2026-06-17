@@ -36,5 +36,6 @@
   "license": "MIT",
   "repository": "github:askalf/warden",
   "engines": { "node": ">=20" },
-  "files": ["src"]
+  "files": ["src"],
+  "publishConfig": { "access": "public" }
 }

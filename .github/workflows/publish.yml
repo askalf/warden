@@ -1,13 +1,14 @@
 name: Publish to npm
 
-# Manual backfill publisher. The PRIMARY release path is auto-release.yml,
-# which fires automatically on a package.json version bump and handles
-# tag + GitHub release + npm publish. This workflow is the documented
-# recovery lever (see npm-token-health.yml): after fixing a rotated
-# NPM_TOKEN, run
-#   gh workflow run publish.yml --ref master
-# to publish whatever version is currently in package.json on master.
-# It is also how the FIRST publish is done (no version bump to react to).
+# npm-ONLY emergency publisher. The PRIMARY release path is auto-release.yml,
+# which fires on a package.json version bump (or manual dispatch) and handles
+# tag + GitHub release + npm publish.
+#
+# PREFER `gh workflow run auto-release.yml --ref master` for recovery / first
+# publish: a manual dispatch there lands a COMPLETE release (npm + tag +
+# GitHub release), idempotently. Use THIS workflow only when you deliberately
+# want to push to npm WITHOUT creating a tag or release — it leaves git/npm
+# out of sync, which is what stranded the original 0.2.0 release.
 #
 # Dispatch-only on purpose. A `release: published` trigger here would
 # double-fire against auto-release.yml (which CREATES the release), and the
