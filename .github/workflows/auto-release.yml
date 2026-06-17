@@ -6,6 +6,12 @@ name: Auto-release
 #
 # Idempotent — if the tag already exists the job exits cleanly without
 # republishing. Manual re-runs via workflow_dispatch are safe.
+#
+# A manual workflow_dispatch BYPASSES the version-diff gate (which only makes
+# sense for push events) and releases whatever version is in package.json,
+# guarded solely by the "tag already exists" check. This makes dispatch the
+# COMPLETE recovery lever after a rotated NPM_TOKEN is fixed: one run tags +
+# creates the GitHub release + publishes to npm (publish.yml only does npm).
 
 on:
   push:
@@ -50,7 +56,10 @@ jobs:
 
       - name: Skip if version field didn't change in this push
         id: bumped
-        if: steps.gate.outputs.skip != 'true'
+        # Push-only: a manual workflow_dispatch intentionally skips this step, so
+        # steps.bumped.outputs.skip stays empty ('' != 'true') and the downstream
+        # release steps run — gated solely by the "tag already exists" check.
+        if: steps.gate.outputs.skip != 'true' && github.event_name == 'push'
         env:
           NEW: ${{ steps.version.outputs.version }}
         run: |
