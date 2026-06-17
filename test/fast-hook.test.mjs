@@ -10,7 +10,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { startDaemon } from '../src/daemon.mjs';
 
-const tmp = (n) => path.join(os.tmpdir(), `warden-fast-${process.pid}-${n}`);
+// Private, unguessable temp dir (random name, 0700) — no predictable tmpdir paths.
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warden-fast-'));
+const tmp = (n) => path.join(dir, String(n));
 const sockPath = (n) => (process.platform === 'win32' ? `\\\\.\\pipe\\warden-fast-${process.pid}-${n}` : tmp(n) + '.sock');
 
 // One round-trip exactly as the native binary does it: write `<raw hook json>\n`,

@@ -5,6 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { AuditLog, ChainedFileAudit, verifyAuditFile, lastHashOf } from '../src/audit.mjs';
 
+// Private, unguessable temp dir (random name, 0700) — no predictable tmpdir paths.
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warden-audit-'));
+
 test('chain verifies when untouched', () => {
   const a = new AuditLog();
   a.record({ x: 1 });
@@ -22,7 +25,7 @@ test('tampering with a past entry breaks verify()', () => {
 });
 
 test('ChainedFileAudit persists a verifiable chain to disk', () => {
-  const p = path.join(os.tmpdir(), 'warden-audit-' + process.pid + '-a.jsonl');
+  const p = path.join(dir, 'a.jsonl');
   try { fs.unlinkSync(p); } catch {}
   const a = new ChainedFileAudit(p);
   a.record({ tool: 'shell', decision: 'block' });
@@ -36,7 +39,7 @@ test('ChainedFileAudit persists a verifiable chain to disk', () => {
 });
 
 test('editing a line in the on-disk audit is detected', () => {
-  const p = path.join(os.tmpdir(), 'warden-audit-' + process.pid + '-b.jsonl');
+  const p = path.join(dir, 'b.jsonl');
   try { fs.unlinkSync(p); } catch {}
   const a = new ChainedFileAudit(p);
   a.record({ tool: 'shell', decision: 'block', why: ['rm -rf /'] });
@@ -50,5 +53,5 @@ test('editing a line in the on-disk audit is detected', () => {
 });
 
 test('lastHashOf returns GENESIS for a missing/empty file', () => {
-  assert.equal(lastHashOf(path.join(os.tmpdir(), 'warden-nope-' + process.pid + '.jsonl')), '0'.repeat(64));
+  assert.equal(lastHashOf(path.join(dir, 'nope.jsonl')), '0'.repeat(64));
 });

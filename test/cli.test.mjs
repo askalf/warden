@@ -25,7 +25,7 @@ test('queryAudit normalizes the legacy "kind" field to a decision', () => {
 
 test('buildInitPolicy returns a valid policy shape', () => {
   const p = buildInitPolicy(process.cwd()); // the warden repo
-  assert.ok(Array.isArray(p.egressAllow) && p.egressAllow.includes('api.anthropic.com'));
+  assert.ok(Array.isArray(p.egressAllow) && p.egressAllow.some((h) => h === 'api.anthropic.com'));
   assert.equal(p.strict, false);
   assert.ok(Array.isArray(p.deny));
   assert.ok(p.writeRoots && p.writeRoots.includes('src/'));

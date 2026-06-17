@@ -3,8 +3,8 @@
 //   node bench/maxstress.mjs [iterations]      (exit 0 = no violations)
 import { decide, check } from '../src/index.mjs';
 import { mapMcpToAction, guardMcpCall, scanToolResult } from '../src/mcp.mjs';
-import { scanSecrets, scanInjection, isExternal, ipScope } from '../src/scan.mjs';
-import { neutralizeQuotedData, ORDER } from '../src/classify.mjs';
+import { scanSecrets, scanInjection, isExternal } from '../src/scan.mjs';
+import { neutralizeQuotedData } from '../src/classify.mjs';
 
 const ITER = Number(process.argv[2] || 60000);
 const HARD_MS = 250;               // ReDoS hard-fail threshold per call

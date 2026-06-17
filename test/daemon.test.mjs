@@ -10,6 +10,9 @@ const sock = process.platform === 'win32'
   ? '\\\\.\\pipe\\warden-test-' + process.pid
   : '/tmp/warden-test-' + process.pid + '.sock';
 
+// Private, unguessable temp dir (random name, 0700) — no predictable tmpdir paths.
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warden-daemon-'));
+
 test('daemon round-trip: block + allow', async () => {
   const server = startDaemon({ socketPath: sock, configPath: null });
   await new Promise((r) => setTimeout(r, 150));
@@ -32,7 +35,7 @@ test('client returns null when no daemon (fallback signal)', async () => {
 
 test('a non-TCP daemon close() does NOT delete a pre-existing info file (cleanup guard)', async () => {
   // regression: a tcp:false daemon (default infoFile) once wiped the live ~/.warden/daemon.json on close.
-  const sentinel = path.join(os.tmpdir(), 'warden-sentinel-' + process.pid + '.json');
+  const sentinel = path.join(dir, 'sentinel.json');
   fs.writeFileSync(sentinel, JSON.stringify({ pid: 999999, port: 1 }));
   const s2 = process.platform === 'win32' ? '\\\\.\\pipe\\warden-t2-' + process.pid : '/tmp/warden-t2-' + process.pid + '.sock';
   const d = startDaemon({ socketPath: s2, configPath: null, infoFile: sentinel }); // tcp defaults false → does not own the info file
