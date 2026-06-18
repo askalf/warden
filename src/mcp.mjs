@@ -1,7 +1,8 @@
 // MCP middleware — firewall an MCP server's tool-calls, and scan its advertised
 // tools for poisoning (malicious instructions hidden in names/descriptions —
 // the OpenClaw poisoned-skill / supply-chain class).
-import { check } from './index.mjs';
+import { check, recordVerdict } from './index.mjs';
+import { classify, TIER, ORDER, WRITE } from './classify.mjs';
 import { scanInjection, injectionHits, safeStringify } from './scan.mjs';
 
 // Extract fetch-shaped fields, tolerating non-standard URL keys (target/href/link)
@@ -11,7 +12,7 @@ const netArgs = (a) => ({ url: a.url || a.uri || a.endpoint || a.target || a.hre
 const NAME_HINTS = [
   { re: /(exec|shell|command|run_|terminal|bash|powershell|process|spawn)/i, tool: 'shell', arg: (a) => ({ command: a.command || a.cmd || a.script || safeStringify(a) }) },
   { re: /(delete|remove|unlink|rmdir)/i, tool: 'delete', arg: (a) => ({ path: a.path || a.target || '' }) },
-  { re: /(write|edit|create|append|put_file|save|patch)/i, tool: 'write', arg: (a) => ({ path: a.path || a.file || a.uri || '', content: a.content || a.text || '' }) },
+  { re: /(write|edit|create|append|put_file|save|patch)/i, tool: 'write', arg: (a) => ({ path: a.path || a.file || a.filepath || a.dest || a.destination || a.target || a.output || a.to || a.location || a.uri || '', content: a.content || a.text || a.body || '' }) },
   { re: /(fetch|http|request|download|webhook|post|api_call|browse|navigate)/i, tool: 'fetch', arg: netArgs },
   { re: /(read|get|list|search|grep|stat|cat|fetch_file)/i, tool: 'read', arg: (a) => ({ path: a.path || a.uri || '', query: a.query || '' }) },
 ];
@@ -48,12 +49,41 @@ export function mapMcpToAction(name, args = {}, nameMap = {}) {
   return { tool: nameStr || 'unknown', input: { ...args } }; // classifier treats unknown tools as yellow
 }
 
+// Content/data keys whose values are legitimately arbitrary text (a file body, a
+// request payload, a commit message) — excluded from the shell-spoof leaf scan so
+// a write/post of dangerous-looking DATA isn't false-blocked as a live command.
+const CONTENT_KEYS = new Set(['content', 'text', 'body', 'data', 'stdin', 'file_text', 'filetext', 'patch', 'diff', 'value', 'payload', 'new_string', 'old_string', 'message', 'description']);
+function shellLeaves(v, key = '', depth = 0, out = []) {
+  if (depth > 6 || out.length > 64 || v == null) return out;
+  if (typeof v === 'string') { if (!CONTENT_KEYS.has(String(key).toLowerCase())) out.push(v); return out; }
+  if (typeof v === 'object') for (const [k, val] of Object.entries(v)) shellLeaves(val, k, depth + 1, out);
+  return out;
+}
+
 /** Firewall a single MCP `tools/call` request. Returns { verdict, action }. */
 export function guardMcpCall(req, policy, opts = {}) {
   const name = req?.params?.name ?? req?.name;
   const args = req?.params?.arguments ?? req?.arguments ?? {};
   const action = mapMcpToAction(name, args, opts.nameMap || {});
-  const verdict = check(action, policy, { audit: opts.audit, skillText: opts.skillText || '' });
+  const verdict = check(action, policy, { skillText: opts.skillText || '' });
+  // Shell-spoof defense across ALL arg keys: a poisoned server can bury a shell
+  // payload under any key (q/run/argv/opts/…), not just command/cmd. Classify each
+  // non-content string leaf as a shell command and escalate to the worst verdict,
+  // so `rm -rf /` on a benignly-named tool can't ride in green. (Write CONTENT is
+  // data — its real threats are the persistence/secret checks, handled in decide.)
+  if (!WRITE.includes(action.tool)) {
+    for (const leaf of shellLeaves(args)) {
+      const c = classify({ tool: 'shell', input: { command: leaf } });
+      if (ORDER[c.tier] > ORDER[verdict.tier]) {
+        verdict.tier = c.tier;
+        for (const w of c.why) if (/[☠⚠]/.test(w) && !verdict.why.includes(w)) verdict.why.push(w);
+        if (c.tier === TIER.BLACK) verdict.decision = 'block';
+        else if (c.tier === TIER.RED && verdict.decision === 'allow') verdict.decision = 'approve';
+      }
+    }
+    verdict.gray = verdict.gray || verdict.decision === 'approve' || verdict.tier === TIER.YELLOW;
+  }
+  recordVerdict(opts.audit, action, verdict);
   return { verdict, action };
 }
 
