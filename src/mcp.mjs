@@ -3,7 +3,7 @@
 // the OpenClaw poisoned-skill / supply-chain class).
 import { check, recordVerdict } from './index.mjs';
 import { classify, TIER, ORDER, WRITE } from './classify.mjs';
-import { scanInjection, injectionHits, safeStringify } from './scan.mjs';
+import { scanInjection, injectionHits, safeStringify, SENSITIVE_PATH_RE, SECRET_ENV_RE } from './scan.mjs';
 
 // Extract fetch-shaped fields, tolerating non-standard URL keys (target/href/link)
 // so a URL isn't lost just because the tool named its argument unusually.
@@ -138,9 +138,14 @@ export function scanMcpTools(tools = []) {
   if (!Array.isArray(tools)) return findings;           // fail-safe: a non-array tool list isn't scannable
   for (const t of tools) {
     if (!t || typeof t !== 'object') continue;           // skip null / primitive entries from a hostile server
-    // safeStringify (not JSON.stringify) so a circular/BigInt schema can't throw.
-    const text = `${t.name || ''} ${t.description || ''} ${safeStringify(t.inputSchema || t.input_schema || {})}`;
+    // Scan the WHOLE tool object (safeStringify — circular/BigInt safe), not a
+    // hand-picked name/description/inputSchema subset: a poisoned instruction or a
+    // sensitive-path / secret-env default can hide in ANY field (prompt,
+    // instructions, systemPrompt, annotations, a schema default, …).
+    const text = safeStringify(t);
     const flags = scanInjection({ input: { _scan: text } });
+    if (SENSITIVE_PATH_RE.test(text)) flags.push('references a sensitive path (.ssh/.env/credentials/…)');
+    if (SECRET_ENV_RE.test(text)) flags.push('reads a secret env var');
     if (flags.length) findings.push({ tool: t.name, flags });
   }
   return findings;
