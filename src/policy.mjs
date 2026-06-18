@@ -24,12 +24,30 @@ export function matchRule(rule, action) {
   return re.test(text);
 }
 
+// Coerce a rule list to an array: a scalar/object (e.g. a `.warden.json` with
+// `"allow": "shell(*)"` instead of `["shell(*)"]`) must NOT survive as a non-array,
+// or the decision engine's `.find()`/`.some()` throws and the hook fails OPEN on a
+// black action. A bad value drops to [] (fail closed: nothing pre-allowed).
+const asRules = (v) => (Array.isArray(v) ? v : []);
+
 /** Merge a .warden.json file over the defaults. Never throws — bad/missing file → defaults. */
 export function loadPolicy(path) {
   try {
     const parsed = JSON.parse(fs.readFileSync(path, 'utf8'));
-    return { ...DEFAULT_POLICY, ...parsed };
+    return normalizePolicy({ ...DEFAULT_POLICY, ...parsed });
   } catch {
     return { ...DEFAULT_POLICY };
   }
+}
+
+/** Force the rule/egress lists to arrays and writeRoots to array|null. Idempotent. */
+export function normalizePolicy(policy) {
+  const p = policy || {};
+  return {
+    ...p,
+    allow: asRules(p.allow),
+    deny: asRules(p.deny),
+    egressAllow: asRules(p.egressAllow),
+    writeRoots: Array.isArray(p.writeRoots) ? p.writeRoots : null,
+  };
 }

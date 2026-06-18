@@ -1,17 +1,30 @@
 // warden — own your agent security. A guard between an agent and its tools.
 import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
 import { scanSecrets, injectionHits, obfuscationHits, isExternal, ipScope, safeStringify, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
-import { matchRule, DEFAULT_POLICY, loadPolicy } from './policy.mjs';
+import { matchRule, DEFAULT_POLICY, loadPolicy, normalizePolicy } from './policy.mjs';
 import { AuditLog } from './audit.mjs';
 
 export { TIER, AuditLog, classify, loadPolicy, matchRule };
+
+// Destination-keyed string values of a write action's input (path/dest/target/…).
+// A poisoned write can name its target `dest`/`output`/`to` instead of `path`;
+// CONTENT keys (the file body) are intentionally excluded — that's data, not a target.
+const DEST_KEY_RE = /(?:^|_)(?:path|filepath|file|dest|destination|target|output|out|to|location|uri)$/i;
+function destPaths(input) {
+  const out = [];
+  if (!input || typeof input !== 'object') return out;
+  for (const [k, v] of Object.entries(input)) if (typeof v === 'string' && DEST_KEY_RE.test(k)) out.push(v);
+  return out;
+}
 
 /** Deterministic verdict for an action. No I/O, no LLM — pure + offline. */
 export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   // Fail safe on malformed input: a null/non-object action or a non-string tool
   // must yield a verdict, never throw into the host agent.
   action = action || {};
-  const { allow = [], deny = [], egressAllow = [], writeRoots = null } = policy || {};
+  // Normalize so a malformed policy (e.g. a scalar `allow`) can NEVER make the
+  // rule-matching below throw — a guard error must not fail OPEN on a black action.
+  const { allow, deny, egressAllow, writeRoots } = normalizePolicy(policy);
   const tool = String(action.tool || '').toLowerCase();
   const base = classify(action);
   // Bound the scanned text. Secrets / injection phrases / metadata hosts that
@@ -64,7 +77,11 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   // string path is a real write target; a non-string (Symbol/array/object) path
   // fails safe to '' rather than throwing on coercion.
   const wpath = typeof action.input?.path === 'string' ? action.input.path : '';
-  if (WRITE.includes(tool) && PERSISTENCE_PATH_RE.test(wpath)) { tier = TIER.BLACK; why.push('☠ persistence target: ' + wpath); }
+  if (WRITE.includes(tool)) {
+    for (const dp of destPaths(action.input)) {
+      if (PERSISTENCE_PATH_RE.test(dp)) { tier = TIER.BLACK; why.push('☠ persistence target: ' + dp); break; }
+    }
+  }
   if (NET.includes(tool) && externalHosts.length && egressAllow.length) {
     tier = worst(tier, TIER.RED);
     why.push('⚠ egress to non-allowlisted host(s): ' + externalHosts.join(','));
@@ -102,7 +119,7 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   return { tool: action.tool, tier, decision, why, externalHosts, gray: decision === 'approve' || tier === TIER.YELLOW || smells.length > 0 };
 }
 
-const recordVerdict = (audit, action, v) =>
+export const recordVerdict = (audit, action, v) =>
   audit && audit.record({ ts: new Date().toISOString(), tool: action.tool, input: action.input, tier: v.tier, decision: v.decision, why: v.why });
 
 /** Sync deterministic check (optionally records to an AuditLog). */

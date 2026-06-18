@@ -3,9 +3,16 @@ export const SECRET_RE = [
   { re: /sk-ant-[A-Za-z0-9_-]{20,}/, why: 'Anthropic API key' },
   { re: /sk-(?:proj-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{40,})/, why: 'OpenAI-style API key' }, // tightened: real keys are sk-proj-… or sk-<40+>; avoids flagging benign sk-<20> identifiers
   { re: /ghp_[A-Za-z0-9]{30,}/, why: 'GitHub PAT' },
+  { re: /github_pat_[A-Za-z0-9_]{30,}/, why: 'GitHub fine-grained PAT' },
+  { re: /gho_[A-Za-z0-9]{30,}/, why: 'GitHub OAuth token' },
+  { re: /glpat-[A-Za-z0-9_-]{20,}/, why: 'GitLab PAT' },
   { re: /AKIA[0-9A-Z]{16}/, why: 'AWS access key id' },
-  { re: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/, why: 'private key' },
-  { re: /xox[baprs]-[A-Za-z0-9-]{10,}/, why: 'Slack token' },
+  { re: /AIza[0-9A-Za-z_-]{35}/, why: 'Google API key' },
+  { re: /\b(?:sk|rk)_live_[0-9A-Za-z]{20,}/, why: 'Stripe live secret key' },
+  { re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/, why: 'SendGrid API key' },
+  { re: /\bxox[baprs]-[A-Za-z0-9-]{10,}/, why: 'Slack token' },
+  { re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, why: 'JWT (signed token)' },
+  { re: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/, why: 'private key' },
 ];
 export const SECRET_ENV_RE = /\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)\w*\}?/i;
 export const SENSITIVE_PATH_RE = /(\.env\b|\.aws[\\/]|\.ssh[\\/]|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/]|[\\/](?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker[\\/]config\.json|\.netrc\b|[\\/]gh[\\/]hosts\.yml|[\\/]gcloud[\\/]|[\\/]\.azure[\\/]|serviceaccount[\\/]token|\.pgpass\b|rclone\.conf|credentials\.tfrc)/i;
