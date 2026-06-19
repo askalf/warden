@@ -85,6 +85,8 @@ warden audit --blocks                                             # what warden 
 warden-serve                                                      # run the daemon (shared classifier + audit, policy hot-reload)
 ```
 
+> **Windows / Git Bash:** MSYS rewrites Unix-looking path arguments before `warden` (a native node process) sees them, so a bare `scan-mcp /srv/tools.json` or `--policy /etc/warden.config.json` can arrive mangled (e.g. prefixed with `C:/Program Files/Git/…`) and miss the file. A quoted JSON action (`warden check '{…}'`) is one arg starting with `{`, so it's safe — only path args are affected. Prefix with `MSYS_NO_PATHCONV=1` and use drive-letter paths (`C:/…`), or run from PowerShell/cmd.
+
 ## Daemon (optional)
 
 `warden-serve` runs a long-lived process that loads the classifier + policy once, streams a hash-chained audit straight to disk, hot-reloads policy on change, and can host the judge tier. It's reachable only with a **capability token** published into a `0600` file — so only your user can talk to it, closing local-process abuse of the judge tier and audit. The Claude Code hook tries the daemon first and **falls back to in-process** if it isn't running (or can't authenticate), so screening always happens and nothing breaks either way — fail-safe, never fail-open. (It offloads classification CPU + centralizes audit; on its own it does not eliminate node's per-call process-startup cost — that's what the native fast hook below is for.)
