@@ -20,6 +20,12 @@ Coverage is **measured, not assumed**: `npm run bench` scores a 234-sample label
 
 ## Quick start
 
+> Not yet on npm — installs straight from GitHub:
+
+```sh
+npm i github:askalf/warden
+```
+
 ```js
 import { check, AuditLog } from '@askalf/warden';
 
