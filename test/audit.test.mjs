@@ -55,3 +55,22 @@ test('editing a line in the on-disk audit is detected', () => {
 test('lastHashOf returns GENESIS for a missing/empty file', () => {
   assert.equal(lastHashOf(path.join(dir, 'nope.jsonl')), '0'.repeat(64));
 });
+
+test('an oversized final record does not re-root the chain across a restart', () => {
+  const p = path.join(dir, 'big.jsonl');
+  try { fs.unlinkSync(p); } catch {}
+  const a = new ChainedFileAudit(p);
+  a.record({ tool: 'shell', decision: 'allow' });
+  // a record larger than the 8 KB tail window (e.g. a verdict with a huge `why`)
+  a.record({ tool: 'shell', decision: 'block', why: ['x'.repeat(20000)] });
+  // lastHashOf must recover the real chain head, not fall back to GENESIS
+  const lines = fs.readFileSync(p, 'utf8').trim().split('\n');
+  const realHead = JSON.parse(lines[lines.length - 1]).hash;
+  assert.equal(lastHashOf(p), realHead);
+  assert.notEqual(lastHashOf(p), '0'.repeat(64));
+  // a "restart" must CONTINUE the chain (no second GENESIS root mid-file)
+  const b = new ChainedFileAudit(p);
+  b.record({ tool: 'read', decision: 'allow' });
+  assert.deepEqual(verifyAuditFile(p), { ok: true, entries: 3 });
+  fs.unlinkSync(p);
+});

@@ -35,20 +35,32 @@ export class AuditLog {
 }
 
 // Read the last chained hash from an audit file so a streaming appender can
-// CONTINUE the chain across process restarts. Reads only the tail (8 KB) — O(1)
-// regardless of how large the log has grown.
+// CONTINUE the chain across process restarts. Reads the tail and GROWS the window
+// until it contains a complete final record — a fixed 8 KB window silently
+// returned GENESIS (re-rooting the chain on the next restart, a false tamper
+// alarm) whenever the last record was larger than the window. Starts at 8 KB so
+// the common case (small records) stays a single O(1) tail read.
 export function lastHashOf(path) {
   try {
     const fd = fs.openSync(path, 'r');
     try {
       const size = fs.fstatSync(fd).size;
       if (!size) return GENESIS;
-      const len = Math.min(size, 8192);
-      const buf = Buffer.alloc(len);
-      fs.readSync(fd, buf, 0, len, size - len);
-      const lines = buf.toString('utf8').split('\n').filter((l) => l.trim());
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try { const o = JSON.parse(lines[i]); if (o && o.hash) return o.hash; } catch {}
+      for (let chunk = 8192; ; chunk *= 8) {
+        const len = Math.min(size, chunk);
+        const off = size - len;
+        const buf = Buffer.alloc(len);
+        fs.readSync(fd, buf, 0, len, off);
+        const segs = buf.toString('utf8').split('\n');
+        // When the window starts mid-file, its first segment is a partial line
+        // (and may begin mid-UTF8). Drop it so we never parse a fragment; keep it
+        // only when the window covers the whole file (off === 0).
+        if (off > 0) segs.shift();
+        for (let i = segs.length - 1; i >= 0; i--) {
+          if (!segs[i].trim()) continue;
+          try { const o = JSON.parse(segs[i]); if (o && o.hash) return o.hash; } catch {}
+        }
+        if (off === 0) break; // whole file scanned, nothing usable → GENESIS
       }
     } finally { fs.closeSync(fd); }
   } catch {}
