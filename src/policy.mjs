@@ -5,6 +5,31 @@ import { safeStringify } from './scan.mjs';
 
 export const DEFAULT_POLICY = { allow: [], deny: [], egressAllow: [], writeRoots: null };
 
+// Linear, anchored glob match where only `*` is special (matches any run of
+// chars, INCLUDING newlines). Replaces the old `pat.replace(/\*/g,'.*')` + anchored
+// RegExp, which had two faults: (1) `.` does not match `\n`, so a rule silently
+// FAILED to match a multi-line command — a deny rule was bypassable by adding a
+// newline (fail-open); (2) every `*`→`.*` against a non-matching subject caused
+// catastrophic backtracking (ReDoS: a multi-star rule could pin a CPU for minutes
+// in the firewall's hot path). This greedy left-to-right scan is O(n·segments)
+// with no backtracking, and `*` spanning newlines fixes the bypass. (`*`-only
+// globs admit a correct greedy match — no `?`/`[]` were ever supported.)
+function globMatch(pattern, text) {
+  const parts = pattern.split('*');
+  if (parts.length === 1) return text === pattern;          // no wildcard → exact
+  if (!text.startsWith(parts[0])) return false;             // anchored prefix
+  let idx = parts[0].length;
+  for (let k = 1; k < parts.length - 1; k++) {              // middle segments, in order
+    const seg = parts[k];
+    if (!seg) continue;
+    const at = text.indexOf(seg, idx);
+    if (at < 0) return false;
+    idx = at + seg.length;
+  }
+  const last = parts[parts.length - 1];
+  return text.length - last.length >= idx && text.endsWith(last); // anchored suffix
+}
+
 /** Does an action match a rule like `shell(npm run test:*)` / `write(src/**)` / `fetch(api.github.com)`? */
 export function matchRule(rule, action) {
   const m = /^(\w+)\((.*)\)$/.exec(rule);
@@ -13,15 +38,14 @@ export function matchRule(rule, action) {
   if (t.toLowerCase() !== String((action && action.tool) || '').toLowerCase()) return false;
   const i = (action && action.input) || {};
   const subject = i.command || i.path || i.url || i;
-  const re = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
   // Coerce safely: a string is itself; an array (split command) joins via
   // map(String) — so a Symbol element can't throw; anything else goes through
-  // safeStringify (circular/BigInt/Symbol-safe). A bare String()/test() would
-  // throw on a Symbol or a Symbol-bearing array.
+  // safeStringify (circular/BigInt/Symbol-safe). A bare String() would throw on
+  // a Symbol or a Symbol-bearing array.
   const text = typeof subject === 'string' ? subject
     : Array.isArray(subject) ? subject.map(String).join(' ')
     : safeStringify(subject);
-  return re.test(text);
+  return globMatch(pat, text);
 }
 
 // Coerce a rule list to an array: a scalar/object (e.g. a `.warden.json` with
