@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.2.0] - 2026-06-15
 
-First public release on npm — own your agent security.
+First public release — own your agent security.
 
 ### Added
 - **Deterministic risk classification** — `check()` / `decide()` sort any agent
