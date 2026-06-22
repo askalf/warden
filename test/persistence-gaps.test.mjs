@@ -54,3 +54,33 @@ test('read-only / edit siblings are NOT false-blocked', () => {
     'Get-WmiObject -Class __EventFilter',
   ]) notBlack(c);
 });
+
+// Persistence-path FALSE-POSITIVE fix (2026-06-22). The write-to-location rules
+// (Startup / authorized_keys / .config/systemd/user / rc-profile / /etc) used
+// `[^|]*` after the verb, which (1) treated an fd-redirect like `2>&1` /
+// `2>/dev/null` as the write `>`, and (2) spanned `;`/`&&` so a `>` in one
+// command associated with a persistence PATH merely READ in another. Now the
+// gap is `[^;\n]*` (one command) and the redirect alt is `(?<![0-9&])>>?`.
+test('reads that merely reference a persistence path are NOT false-blocked', () => {
+  for (const c of [
+    // fd-redirect (2>&1 / 2>/dev/null) is not a write verb
+    'find / 2>/dev/null -path "*/Startup/*"',
+    'ls -la "$HOME/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/" 2>&1',
+    // a `>` in one command must not bind to a path read in the next command
+    'ls -la /var/log 2>&1; ls -la "$HOME/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/"',
+    'echo done > /tmp/log.txt; ls "$HOME/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/"',
+    'systemctl status sshd 2>&1; cat ~/.ssh/authorized_keys',
+    'tail -f /var/log/syslog 2>&1; source ~/.bashrc',
+    'cat /etc/systemd/system/sshd.service 2>/dev/null; echo ok > /tmp/x',
+  ]) notBlack(c);
+});
+
+test('genuine writes to a persistence location still block', () => {
+  blocks('echo "evil" >> ~/.bashrc');                                                            // stdout append
+  blocks('echo x > "C:\\Users\\me\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\run.bat"'); // genuine `>` into Startup
+  blocks('Copy-Item evil.vbs "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\u.vbs"');
+  blocks('cp backdoor.service ~/.config/systemd/user/x.service');
+  blocks('tee -a ~/.bashrc');
+  blocks('echo "ssh-rsa AAAA attacker" >> ~/.ssh/authorized_keys');
+  blocks('install -m 644 evil /etc/cron.d/job');
+});
