@@ -5,6 +5,7 @@ export const SECRET_RE = [
   { re: /ghp_[A-Za-z0-9]{30,}/, why: 'GitHub PAT' },
   { re: /github_pat_[A-Za-z0-9_]{30,}/, why: 'GitHub fine-grained PAT' },
   { re: /gho_[A-Za-z0-9]{30,}/, why: 'GitHub OAuth token' },
+  { re: /gh[sur]_[A-Za-z0-9]{30,}/, why: 'GitHub App / Actions token' }, // ghs_ = GITHUB_TOKEN in every Actions run; ghu_ user-to-server; ghr_ refresh
   { re: /glpat-[A-Za-z0-9_-]{20,}/, why: 'GitLab PAT' },
   { re: /AKIA[0-9A-Z]{16}/, why: 'AWS access key id' },
   { re: /AIza[0-9A-Za-z_-]{35}/, why: 'Google API key' },
