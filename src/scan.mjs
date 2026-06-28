@@ -73,6 +73,14 @@ export function isExternal(host, allow = []) {
   if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(h)) return false;          // link-local
   if (/^(?:fe80:|fc00:|fd[0-9a-f]{2}:)/.test(h)) return false;        // IPv6 link-local / ULA
   if (allow.some((d) => h === d.toLowerCase() || h.endsWith('.' + d.toLowerCase()))) return false;
+  // A single-label hostname (no dot, no colon) is NOT a public destination — it
+  // resolves only locally: a docker/compose service name, an /etc/hosts entry, an
+  // intranet short name. Public exfil targets are always a dotted FQDN or an IP
+  // (both handled above), and `localhost.evil.com` / `127.0.0.1.evil.com` keep
+  // their dot so they still flag. This stops bare service names (dario, forge,
+  // ollama, postgres, redis) from reading as external exfil destinations — the
+  // source of repeated EXFIL false-positives on internal docker traffic.
+  if (!h.includes('.') && !h.includes(':')) return false;
   return true;
 }
 
