@@ -79,7 +79,15 @@ export const BLACK_SHELL = [
   { re: /\bdocker\s+run\b[^|]*-v\s+\/:(?:\/|\s|$)/i, why: 'mounts host root into container (escape)' },
   { re: /\bnsenter\b[^|]*(?:--target|-t)\s*1\b/i, why: 'namespace escape to host (nsenter)' },
   { re: /\b(?:env|printenv|set)\b\s*\|\s*(?:curl|wget|nc|ncat)\b/i, why: 'pipes environment to the network (exfil)' },
-  { re: /\b(?:nslookup|dig|host)\b[^|]*\$\([^)]*(?:cat|base64|whoami|hostname|env|printenv)/i, why: 'DNS exfiltration' },
+  // Anchor the DNS tool to COMMAND POSITION (string start | after a shell
+  // separator/backtick | inside a $( )) and require `[ \t]+` after it (a real
+  // command with an argument), then a $(…exfil…) within the same pipe/cmd segment.
+  // The old `\b(?:…)\b[^|]*\$\(` matched the prose words "host"/"dig" anywhere —
+  // so a PR title like `fix(host):` or a body mentioning "dig" plus a heredoc
+  // `$(cat …)` false-blocked as DNS-exfil. This keeps real `dig $(cat …).evil`
+  // (incl. -t TXT / @server / +short / nested / piped) black, and clears
+  // `host=$(cat …)` assignments and prose.
+  { re: /(?:^|[\n;&|`]|\$\()\s*(?:nslookup|dig|host)\b[ \t]+[^|;&\n]{0,200}?\$\([^)]*(?:cat|base64|whoami|hostname|env|printenv)/i, why: 'DNS exfiltration' },
 
   // --- download-and-execute LOLBins (Windows). Scoped so read-only uses
   //     (certutil -hashfile, reg query, sc query) do NOT match. ---
