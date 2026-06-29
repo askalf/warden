@@ -22,14 +22,19 @@ const clean = verifyAuditFile(src);
 console.log('1) intact chain  ->', JSON.stringify(clean));
 if (!clean.ok) { console.error('UNEXPECTED: clean chain did not verify'); process.exit(1); }
 
-// 2) tamper: rewrite a blocked verdict to "allow" in a COPY, re-verify -> fails
-const tampered = path.join(os.tmpdir(), 'tampered_audit.jsonl');
+// 2) tamper: rewrite a blocked verdict to "allow" in a COPY, re-verify -> fails.
+// Use a per-run unique temp dir (mkdtempSync) instead of a fixed name in the
+// shared temp dir — a predictable path in os.tmpdir() is a symlink/race surface
+// (CodeQL js/insecure-temporary-file).
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warden-audit-'));
+const tampered = path.join(tmpDir, 'tampered_audit.jsonl');
 const lines = fs.readFileSync(src, 'utf8').trimEnd().split('\n');
 const i = lines.findIndex((l) => l.includes('"decision":"block"'));
 lines[i] = lines[i].replace('"decision":"block"', '"decision":"allow"');
 fs.writeFileSync(tampered, lines.join('\n') + '\n');
 const bad = verifyAuditFile(tampered);
 console.log(`2) after flipping the blocked verdict (entry ${i}) to "allow" -> ${JSON.stringify(bad)}`);
+fs.rmSync(tmpDir, { recursive: true, force: true });
 
 const passed = clean.ok && !bad.ok;
 console.log('\n' + (passed ? 'AUDIT_TAMPER_EVIDENT_PASS' : 'AUDIT_TAMPER_EVIDENT_FAIL'));
