@@ -1,0 +1,8 @@
+# runtime artifacts from running the example
+notes_workspace/
+flow_audit.jsonl
+audit.jsonl
+.home/
+.crewai_storage/
+__pycache__/
+*.pyc
