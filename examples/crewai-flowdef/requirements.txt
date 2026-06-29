@@ -1,0 +1,5 @@
+# CrewAI FlowDefinition + MCP client. On a glibc host this is all you need:
+#   pip install -r requirements.txt
+# (pulls lancedb/chromadb manylinux wheels transitively; the musl shim in
+#  _musl_rag_shim.py is then a no-op and can be deleted.)
+crewai==1.15.1
