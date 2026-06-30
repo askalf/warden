@@ -1,0 +1,4 @@
+1) intact chain  -> {"ok":true,"entries":3}
+2) after flipping the blocked verdict (entry 1) to "allow" -> {"ok":false,"at":1}
+
+AUDIT_TAMPER_EVIDENT_PASS

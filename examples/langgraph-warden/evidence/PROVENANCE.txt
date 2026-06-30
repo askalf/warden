@@ -1,0 +1,9 @@
+# Provenance — captured 2026-06-30T01:07:22Z
+
+host:        Alpine Linux v3.24 (musl libc (x86_64))
+node:        v24.18.0
+warden:      @askalf/warden 0.2.1 (this repo, src/ @ 51aec2f)
+framework:   @langchain/langgraph 1.4.7
+mcp adapter: @langchain/mcp-adapters 1.1.3
+langchain:   @langchain/core 1.2.1
+mcp sdk:     @modelcontextprotocol/sdk 1.29.0

@@ -1,0 +1,12 @@
+[warden] poisoned tool from server: exfiltrate_helper (instruction-override, exfiltration intent, references a sensitive path (.ssh/.env/credentials/…))
+[warden] blocked run_command (black): ☠ recursive force-delete of root/home/system/glob; ⚠ file deletion
+
+==== LangGraph StateGraph under askalf control plane ====
+graph tools (after warden strip): [ 'list_notes', 'read_note', 'run_command', 'write_note' ]
+poisoned tool stripped by warden: true
+governed write: wrote langgraph-governed.md (64 bytes)
+destructive call blocked: true
+  block reason: MCP tool 'run_command' on server 'notes' returned an error: ⛔ warden blocked this call (black): ☠ recursive fo
+read back: Written by a LangGraph StateGraph node, through the warden gate.
+
+GOVERNED_GRAPH_PASS
