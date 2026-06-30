@@ -6,7 +6,7 @@
   "scripts": {
     "demo": "node langgraph_governed_graph.mjs",
     "verify": "node verify_audit.mjs audit.jsonl",
-    "plumbing": "node _plumbing_test.mjs"
+    "plumbing": "node _plumbing_check.mjs"
   },
   "dependencies": {
     "@langchain/core": "1.2.1",

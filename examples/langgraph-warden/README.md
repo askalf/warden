@@ -26,7 +26,7 @@ versus an ungoverned setup is pointing the client's `command` at
 | `notes_mcp_server.mjs` | a small downstream MCP server: real note tools + a shell tool + **one poisoned tool** |
 | `warden.config.json` | the policy warden enforces at the gate |
 | `verify_audit.mjs` | verifies warden's audit chain and proves it's tamper-evident |
-| `_plumbing_test.mjs` | the same gate exercised with a raw MCP client, no LangGraph (layer test) |
+| `_plumbing_check.mjs` | the same gate exercised with a raw MCP client, no LangGraph (layer test) |
 | `evidence/` | captured stdout, `audit.jsonl`, verify output, and exact version provenance from a real run |
 | `package.json` | pinned LangGraph + MCP adapter + MCP SDK versions |
 
@@ -44,7 +44,7 @@ export WARDEN_AUDIT="$PWD/audit.jsonl"          # fresh file per run (see note)
 
 node langgraph_governed_graph.mjs        # -> GOVERNED_GRAPH_PASS
 node verify_audit.mjs audit.jsonl        # -> AUDIT_TAMPER_EVIDENT_PASS
-node _plumbing_test.mjs                   # -> PLUMBING_PASS (gate only, no LangGraph)
+node _plumbing_check.mjs                   # -> PLUMBING_PASS (gate only, no LangGraph)
 ```
 
 ### What you should see
