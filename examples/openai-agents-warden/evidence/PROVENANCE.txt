@@ -1,0 +1,10 @@
+# Provenance — captured 2026-06-30T05:58Z
+
+host:        Alpine Linux v3.24 (musl libc (x86_64))
+node:        v24.18.0
+warden:      @askalf/warden 0.2.1 (this repo, src/ @ 51aec2f)
+framework:   @openai/agents 0.12.0 (OpenAI Agents SDK for JS/TS)
+agents-core: @openai/agents-core 0.12.0
+mcp sdk:     @modelcontextprotocol/sdk 1.29.0
+openai:      openai 6.45.0 (transitive; never called — the model is stubbed offline)
+zod:         zod 4.4.3

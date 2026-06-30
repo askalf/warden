@@ -1,0 +1,16 @@
+{
+  "name": "openai-agents-warden-example",
+  "private": true,
+  "type": "module",
+  "description": "Govern an OpenAI Agents SDK agent's MCP tool calls with warden",
+  "scripts": {
+    "demo": "node agent_governed_flow.mjs",
+    "verify": "node verify_audit.mjs audit.jsonl",
+    "plumbing": "node _plumbing_check.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@openai/agents": "0.12.0",
+    "zod": "4.4.3"
+  }
+}

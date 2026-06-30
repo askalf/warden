@@ -1,0 +1,8 @@
+# runtime artifacts from running the example (evidence/ is checked in on purpose)
+/node_modules/
+/notes_workspace/
+/audit.jsonl
+/plumbing_audit.jsonl
+/package-lock.json
+__pycache__/
+*.pyc
