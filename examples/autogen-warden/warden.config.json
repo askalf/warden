@@ -1,0 +1,6 @@
+{
+  "allow": ["write(*)", "read(*)", "list(*)"],
+  "deny": [],
+  "egressAllow": [],
+  "writeRoots": null
+}

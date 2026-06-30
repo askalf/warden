@@ -1,0 +1,7 @@
+# Microsoft AutoGen (v0.4+ architecture) + its first-party MCP tool integration.
+#   pip install -r requirements.txt
+# autogen-ext[mcp] pulls AutoGen's McpWorkbench and the `mcp` client library.
+# Unlike CrewAI, AutoGen has no native vector-DB deps, so it installs cleanly on
+# musl (Alpine) too — no shim needed.
+autogen-agentchat==0.7.5
+autogen-ext[mcp]==0.7.5

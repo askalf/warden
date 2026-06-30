@@ -1,0 +1,17 @@
+# Provenance — captured 2026-06-30T21:04Z
+
+host:          Alpine Linux v3.24 (musl libc (x86_64))
+node:          v24.18.0
+python:        CPython 3.12.13 (musl)
+warden:        @askalf/warden 0.2.1 (this repo, src/ @ 5a0fc1d)
+framework:     Microsoft AutoGen (v0.4+ actor architecture)
+  autogen-agentchat: 0.7.5   (AssistantAgent — the genuine agent loop)
+  autogen-ext:       0.7.5   (McpWorkbench / StdioServerParams — AutoGen's first-party MCP client)
+  autogen-core:      0.7.5   (FunctionCall / ChatCompletionClient model interface)
+mcp:           mcp 1.28.1 (the MCP client library McpWorkbench drives under the hood)
+
+note: NO OpenAI/Azure/Anthropic key is set or used. AutoGen requires a
+model_client, so the model is a deterministic scripted ChatCompletionClient
+(no network) emitting the FunctionCall items a tool-using LLM would choose.
+The governance path (McpWorkbench -> warden-mcp -> notes server) and AutoGen's
+genuine tool-execution loop are real and unmodified.

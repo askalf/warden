@@ -1,0 +1,7 @@
+# runtime artifacts from running the example (evidence/ is checked in on purpose)
+/notes_workspace/
+/audit.jsonl
+/plumbing_audit.jsonl
+.venv/
+__pycache__/
+*.pyc
