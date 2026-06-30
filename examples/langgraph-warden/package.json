@@ -1,0 +1,18 @@
+{
+  "name": "langgraph-warden-example",
+  "private": true,
+  "type": "module",
+  "description": "Govern a LangGraph.js StateGraph's MCP tool calls with warden",
+  "scripts": {
+    "demo": "node langgraph_governed_graph.mjs",
+    "verify": "node verify_audit.mjs audit.jsonl",
+    "plumbing": "node _plumbing_check.mjs"
+  },
+  "dependencies": {
+    "@langchain/core": "1.2.1",
+    "@langchain/langgraph": "1.4.7",
+    "@langchain/mcp-adapters": "1.1.3",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "zod": "4.4.3"
+  }
+}
