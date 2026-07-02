@@ -81,20 +81,33 @@ export class ChainedFileAudit {
   }
 }
 
-// Verify an on-disk audit chain. { ok:true, entries:N } or { ok:false, at:i }.
-// Leading legacy lines written before chaining existed (no `hash` field) are
-// unprotected history and skipped; verification covers the chain from where it
-// begins (its first entry must root at GENESIS, so the suffix can't be forged).
+// Verify an on-disk audit chain. { ok:true, entries:N } (plus `unchained:K` when
+// K>0 unprotected lines were skipped) or { ok:false, at:i }.
+//
+// Only records the chained audit wrote — a string `prev` AND `hash` — are part of
+// the chain. Any other line is UNPROTECTED history, not part of the chain, and is
+// skipped WITHOUT counting as a break: a legacy pre-chain record, or a record
+// appended by a different, non-chained writer that happens to share this file
+// (e.g. an in-process hook fallback logging raw tool calls). Such a line appearing
+// mid-file must not read as tampering when the chain around it is intact — and it
+// must not let an attacker defeat verification by appending one junk line.
+//
+// This still catches every tamper of a CHAINED record: editing one breaks its
+// hash; deleting one breaks the next record's `prev` link; and stripping a
+// record's `prev`/`hash` to disguise an edit as "un-chained" leaves the NEXT
+// chained record's `prev` pointing at a hash that is no longer in the running
+// chain — a break. The first chained record must still root at GENESIS, so the
+// verified suffix can't be forged.
 export function verifyAuditFile(path) {
-  let prev = GENESIS, n = 0, started = false, data;
+  let prev = GENESIS, n = 0, unchained = 0, data;
   try { data = fs.readFileSync(path, 'utf8'); } catch { return { ok: true, entries: 0 }; }
   for (const line of data.split('\n')) {
     if (!line.trim()) continue;
     let e; try { e = JSON.parse(line); } catch { return { ok: false, at: n }; }
-    if (!started) { if (typeof e.hash !== 'string') continue; started = true; } // skip pre-chain legacy lines
+    if (typeof e.prev !== 'string' || typeof e.hash !== 'string') { unchained++; continue; } // unprotected, not chained
     const { prev: p, hash, ...rec } = e;
     if (p !== prev || hashOf(prev, rec) !== hash) return { ok: false, at: n };
     prev = hash; n++;
   }
-  return { ok: true, entries: n };
+  return unchained ? { ok: true, entries: n, unchained } : { ok: true, entries: n };
 }
