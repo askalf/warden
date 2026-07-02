@@ -110,7 +110,7 @@ warden-serve                                                      # run the daem
 
 ## Native fast hook
 
-A node hook pays node's startup + module-load on every tool call (~78ms here). [`native/warden-fast`](native/README.md) is a tiny compiled client (Go, zero deps, single static binary) that just pipes the hook's stdin to the daemon over loopback and prints the verdict back — **4.3× faster, ~60ms saved per call**, with all logic still in the daemon. Build it, run `warden serve`, and point your PreToolUse hook at the binary. Fail-open by design.
+A node hook pays node's startup + module-load on every tool call (~78ms here). [`native/warden-fast`](native/README.md) is a tiny compiled client (Go, zero deps, single static binary) that just pipes the hook's stdin to the daemon over loopback and prints the verdict back — **4.3× faster, ~60ms saved per call**, with all logic still in the daemon. Build it, run `warden-serve`, and point your PreToolUse hook at the binary. **Fail-safe, not fail-open:** if the daemon is unreachable it falls back to the in-process Node hook — slower, but it still screens — and only fails open if that fallback is gone too, so it never blocks your tooling and never silently stops screening.
 
 ## Demo
 

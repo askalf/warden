@@ -26,7 +26,7 @@ Claude Code ──stdin(JSON)──▶ warden-fast ──TCP 127.0.0.1──▶ 
                                   └──────── stdout bytes ────────┘
 ```
 
-1. The daemon (`warden serve`) writes its loopback port to `~/.warden/daemon.json` (0600).
+1. The daemon (`warden-serve`) writes its loopback port to `~/.warden/daemon.json` (0600).
 2. `warden-fast` reads that port, forwards the hook's stdin verbatim, reads back
    one line, and prints it — that line is **exactly** the bytes the hook should
    emit (a `hookSpecificOutput` deny/ask JSON, or empty for allow/defer).
@@ -35,11 +35,14 @@ It parses none of the payload, holds no policy, runs no classifier. **All logic
 stays in the daemon (JS) — the single source of truth.** The binary is dumb on
 purpose: nothing to keep in sync, nothing to drift.
 
-**Fail-open by design.** No daemon, timeout, or short read → exit 0 with no
-output, so Claude Code proceeds. warden can never brick your tooling. (If you
-want screening when the daemon is down, register the Node hook `warden-hook`
-instead — it classifies in-process as a fallback. `warden-fast` is the
-daemon-paired speed mode.)
+**Fail-safe, not fail-open.** If the daemon can't be reached (not running,
+timeout, or short read), `warden-fast` falls back to the in-process Node hook
+(`src/cc-hook.mjs`) — slower, but it still screens. Only if that fallback is
+also unavailable does it exit 0 with no output so Claude Code proceeds — warden
+never bricks your tooling, but it never silently stops screening either. The
+fast ~2ms path is unchanged; the fallback is a cold path that runs only when the
+daemon is down. Override the fallback hook with `WARDEN_FALLBACK_HOOK` (and the
+node binary with `WARDEN_NODE`).
 
 ## Security model
 
@@ -67,7 +70,7 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o w
 Verify against a live daemon (spawns the binary exactly as Claude Code does):
 
 ```sh
-node native/smoke.mjs      # correctness: deny / defer / fail-open
+node native/smoke.mjs      # correctness: deny / defer / daemon-down fallback
 node native/bench.mjs 30   # latency vs the node hook
 ```
 
@@ -75,7 +78,7 @@ node native/bench.mjs 30   # latency vs the node hook
 
 1. Run the daemon (ideally as a service so it's always up):
    ```sh
-   warden serve              # listens on the socket + loopback fast-hook
+   warden-serve              # listens on the socket + loopback fast-hook
    ```
 2. Point your Claude Code PreToolUse hook command at the binary instead of
    `warden-hook`:

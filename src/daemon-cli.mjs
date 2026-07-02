@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// warden serve — run the daemon. Reads policy from ~/.warden/config.json,
+// warden-serve — run the daemon. Reads policy from ~/.warden/config.json,
 // audits to ~/.warden/audit.jsonl, listens on the platform socket.
 import fs from 'node:fs';
 import os from 'node:os';
