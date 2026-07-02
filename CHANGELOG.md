@@ -4,6 +4,23 @@ All notable changes to **@askalf/warden** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **Audit verifier — interspersed unprotected records no longer read as tampering.**
+  `verifyAuditFile()` skipped only *leading* pre-chain lines; the first line
+  lacking a `prev`/`hash` mid-file was treated as a chain break, so any file that
+  a second, non-chained writer had appended to (e.g. an in-process hook fallback
+  logging raw tool calls into the shared `~/.warden/audit.jsonl`) reported
+  `ok:false` even when the hash chain was fully intact — and an attacker could
+  defeat verification outright by appending one junk line. Now any line without a
+  string `prev`+`hash` is treated as unprotected history: skipped and tallied as
+  `unchained`, while the chained records are verified continuously. Tamper
+  detection is unchanged — editing a chained record breaks its hash, deleting one
+  breaks the next record's link, and stripping a record's `prev`/`hash` to
+  disguise an edit breaks the following record's link. Pinned by three regression
+  tests (interspersed foreign record, junk-tail append, strip-to-disguise).
+
 ## [0.2.1] - 2026-06-27
 
 ### Fixed
