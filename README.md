@@ -69,6 +69,17 @@ warden-mcp --policy warden.config.json -- npx -y @modelcontextprotocol/server-fi
 
 Point your MCP client (Claude Code, Claude Desktop, …) at `warden-mcp` instead of the server directly. Every `tools/call` is firewalled before it reaches the server; **poisoned tools are stripped from `tools/list` before the client ever sees them**; blocks come back as normal tool errors the model can read. Flags: `--allow-approve` (downgrade approval-tier to allow), `--no-strip` (warn instead of strip), `--audit <file>` (hash-chained log).
 
+## Works with your agent framework
+
+Because the proxy is a plain MCP server, **anything that speaks MCP is governable with zero changes to the framework or the tools** — the only difference versus an ungoverned setup is pointing the framework's MCP client at `warden-mcp -- <server>` instead of `<server>`. Four end-to-end examples, each running a real agent framework against a tool server that carries **one poisoned tool** (stripped at the gate) and finishing with a verified tamper-evident audit:
+
+| Framework | Example |
+|---|---|
+| **LangGraph.js** — `@langchain/langgraph` StateGraph | [`examples/langgraph-warden`](examples/langgraph-warden) |
+| **OpenAI Agents SDK** | [`examples/openai-agents-warden`](examples/openai-agents-warden) |
+| **CrewAI** — v1.15 Flow (Python) | [`examples/crewai-flowdef`](examples/crewai-flowdef) |
+| **Microsoft AutoGen** (Python) | [`examples/autogen-warden`](examples/autogen-warden) |
+
 ## Optional LLM judge
 
 ```js
