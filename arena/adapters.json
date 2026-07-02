@@ -1,0 +1,49 @@
+{
+  "_comment": "Adapter registry for the arena runner. `cmd` is spawned from the repo root; the corpus is written to its stdin as JSONL and verdicts are read from stdout (see protocol.md). If a cmd can't be spawned (tool not installed, missing API key), the runner marks it unavailable and skips it. Competitor entries are roadmap: their adapter files are not committed yet — see README.md, and note which need an operator-provided API key (cost) versus which are OSS/local-runnable.",
+  "adapters": [
+    {
+      "id": "warden",
+      "name": "warden",
+      "cmd": ["node", "arena/adapters/warden.mjs"],
+      "deterministic": true,
+      "offline": true,
+      "license": "MIT",
+      "homepage": "https://github.com/askalf/warden",
+      "notes": "this repo, default posture (no LLM judge)"
+    },
+    {
+      "id": "deny-list",
+      "name": "regex deny-list (baseline)",
+      "cmd": ["node", "arena/adapters/deny-list-baseline.mjs"],
+      "deterministic": true,
+      "offline": true,
+      "license": "MIT",
+      "notes": "naive roll-your-own floor"
+    },
+    {
+      "id": "allow-all",
+      "name": "allow-all (null)",
+      "cmd": ["node", "arena/adapters/allow-all.mjs"],
+      "deterministic": true,
+      "offline": true,
+      "license": "MIT",
+      "notes": "sanity floor: 0% recall"
+    },
+    {
+      "id": "block-all",
+      "name": "block-all (paranoid)",
+      "cmd": ["node", "arena/adapters/block-all.mjs"],
+      "deterministic": true,
+      "offline": true,
+      "license": "MIT",
+      "notes": "sanity ceiling: 100% recall / 0% precision — proves recall alone is gameable"
+    }
+  ],
+  "roadmap": [
+    { "id": "llamafirewall", "name": "Meta LlamaFirewall", "kind": "oss-local", "license": "MIT", "homepage": "https://github.com/meta-llama/PurpleLlama", "notes": "OSS, pip-installable; PromptGuard scanner runs local (small model), CodeShield is regex/semgrep. Buildable without a paid key." },
+    { "id": "nemo-guardrails", "name": "NVIDIA NeMo Guardrails", "kind": "oss-local-llm", "license": "Apache-2.0", "homepage": "https://github.com/NVIDIA/NeMo-Guardrails", "notes": "OSS but rail checks are LLM-backed → needs a model endpoint (local or API). Non-deterministic; good contrast case." },
+    { "id": "claw-patrol", "name": "Claw Patrol (Deno agent firewall)", "kind": "oss-local", "notes": "OSS, local-runnable; the two-layer comparison from the sprayberrylabs blog." },
+    { "id": "lakera-guard", "name": "Lakera Guard", "kind": "cloud-api", "homepage": "https://www.lakera.ai/", "notes": "cloud API — needs LAKERA_API_KEY (paid). Operator decision before wiring." },
+    { "id": "promptguard-hf", "name": "prompt-injection classifier (HF, local)", "kind": "oss-local-model", "notes": "e.g. a deberta-based injection classifier via transformers; local, non-deterministic-ish. Injection-family only." }
+  ]
+}

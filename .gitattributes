@@ -1,0 +1,7 @@
+# Generated benchmark artifacts — pin LF so regeneration and the drift-guard test
+# are byte-deterministic across platforms. Without this, Windows autocrlf checks
+# these files out as CRLF while the generators (arena/build-corpus.mjs,
+# arena/run.mjs) emit LF, which would fail the sync test on Windows CI.
+arena/corpus.json   text eol=lf
+arena/results.json  text eol=lf
+arena/RESULTS.md    text eol=lf
