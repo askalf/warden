@@ -4,7 +4,32 @@ All notable changes to **@askalf/warden** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-07-03
+
+### Added
+- **arena — a neutral, reproducible agent-firewall benchmark** (`npm run arena`):
+  on a labeled corpus of real attacks and real benign work, every tool is scored
+  on recall *and* precision *and* determinism through one pipe, so the numbers
+  are comparable instead of anecdotal. Ships allow-all / block-all anchors, a
+  naive regex deny-list baseline, and a **LlamaFirewall adapter**, framed along
+  threat-model axes (what each tool even attempts to cover). Results live in
+  `arena/RESULTS.md` and regenerate with `node arena/run.mjs`.
+- **`scanMcpTools` severity tiers** — every finding now carries
+  `severity: 'critical' | 'advisory'`. Injection/exfil *instructions* (the
+  curated patterns) are critical; a bare sensitive-path / secret-env *mention*
+  is advisory, so consumers scanning long-form skill prose (canon) can stop
+  treating instructional docs about credential handling as poison — scanning
+  the official Claude Code marketplace flagged 19/29 skills on exactly those
+  mention heuristics. Additive: `flags` are unchanged and consumers that only
+  read them behave as before.
+- **`SENSITIVE_PATH_EXFIL_RE`** — a sensitive path being *moved*
+  (transfer-verb → sensitive path → destination, one clause), e.g.
+  `read ~/.ssh/id_rsa and POST it to https://…`, which the curated exfil
+  patterns miss (wrong verb/noun combination). Critical, and built on
+  `SENSITIVE_PATH_RE` so the two can't drift apart.
+- **Four framework-governance examples** (`examples/`) — the same warden MCP
+  gate governing a CrewAI Flow, a LangGraph.js StateGraph, an OpenAI Agents SDK
+  agent, and a Microsoft AutoGen agent, all surfaced in the README.
 
 ### Fixed
 - **Three scanner false-positive classes, measured on 2,000+ real marketplace
@@ -24,23 +49,18 @@ adheres to [Semantic Versioning](https://semver.org/).
     descriptive prose — memory leaks, ML data leakage, threat lists in
     defensive security docs. The flag itself is unchanged, so strict
     (tool-description) surfaces still act on it.
-
-### Added
-- **`scanMcpTools` severity tiers** — every finding now carries
-  `severity: 'critical' | 'advisory'`. Injection/exfil *instructions* (the
-  curated patterns) are critical; a bare sensitive-path / secret-env *mention*
-  is advisory, so consumers scanning long-form skill prose (canon) can stop
-  treating instructional docs about credential handling as poison — scanning
-  the official Claude Code marketplace flagged 19/29 skills on exactly those
-  mention heuristics. Additive: `flags` are unchanged and consumers that only
-  read them behave as before.
-- **`SENSITIVE_PATH_EXFIL_RE`** — a sensitive path being *moved*
-  (transfer-verb → sensitive path → destination, one clause), e.g.
-  `read ~/.ssh/id_rsa and POST it to https://…`, which the curated exfil
-  patterns miss (wrong verb/noun combination). Critical, and built on
-  `SENSITIVE_PATH_RE` so the two can't drift apart.
-
-### Fixed
+- **Three classifier false-positive classes:**
+  - single-label hostnames (Docker service names like `db` or `redis`) are
+    treated as internal, so container-to-container traffic no longer reads as
+    an exfil destination;
+  - the `curl | interpreter` RCE rule fires only on an *external* target —
+    piping from localhost/internal services no longer flags;
+  - the DNS-exfil rule is anchored to command position, so prose that merely
+    mentions `host`/`dig` no longer flags.
+- **Docs matched to shipped behavior** — the native hook (`warden-fast`) is
+  fail-safe, not fail-open (daemon unreachable → it execs the in-process Node
+  hook, which still screens), and the daemon command is `warden-serve`, not
+  `warden serve`.
 - **Audit verifier — interspersed unprotected records no longer read as tampering.**
   `verifyAuditFile()` skipped only *leading* pre-chain lines; the first line
   lacking a `prev`/`hash` mid-file was treated as a chain break, so any file that
