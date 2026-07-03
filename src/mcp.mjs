@@ -3,7 +3,7 @@
 // the OpenClaw poisoned-skill / supply-chain class).
 import { check, recordVerdict } from './index.mjs';
 import { classify, TIER, ORDER, WRITE } from './classify.mjs';
-import { scanInjection, injectionHits, safeStringify, SENSITIVE_PATH_RE, SENSITIVE_PATH_EXFIL_RE, SECRET_ENV_RE } from './scan.mjs';
+import { injectionHits, safeStringify, SENSITIVE_PATH_RE, SENSITIVE_PATH_EXFIL_RE, SECRET_ENV_RE } from './scan.mjs';
 
 // Extract fetch-shaped fields, tolerating non-standard URL keys (target/href/link)
 // so a URL isn't lost just because the tool named its argument unusually.

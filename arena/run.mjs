@@ -27,7 +27,6 @@ const RUNS = Number(arg('--runs', '2')) === 1 ? 1 : 2;
 // What the adapter is allowed to see — the action, never the ground truth.
 const feed = corpus.samples.map((s) => ({ id: s.id, tool: s.tool, command: s.command, action: s.action, ...(s.skill ? { skill: s.skill } : {}) }));
 const jsonl = feed.map((s) => JSON.stringify(s)).join('\n') + '\n';
-const byId = new Map(corpus.samples.map((s) => [s.id, s]));
 
 // Spawn an adapter, feed the corpus on stdin, collect verdicts keyed by id.
 // Resolves { ok:false, reason } if the command can't be spawned.
@@ -145,7 +144,6 @@ for (const a of chosen) {
 
 // ---- emit ----
 const pf = (x) => (x == null ? '—' : (100 * x).toFixed(1) + '%');
-const ms = (x) => (x == null ? '—' : x < 1 ? x.toFixed(3) : x.toFixed(2));
 const yn = (b) => (b == null ? '—' : b ? 'yes' : 'no');
 const det = (a) => {
   if (a.observedDeterministic == null) return a.deterministic ? 'yes*' : 'no*';
