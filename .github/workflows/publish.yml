@@ -1,18 +1,18 @@
 name: Publish to npm
 
-# npm-ONLY emergency publisher. The PRIMARY release path is auto-release.yml,
-# which fires on a package.json version bump (or manual dispatch) and handles
-# tag + GitHub release + npm publish.
+# npm-ONLY publisher, and the ONLY workflow that can publish via OIDC trusted
+# publishing: the npmjs.com trusted publisher is bound to this exact filename
+# (publish.yml), so auto-release.yml's npm step cannot authenticate this way.
+# auto-release.yml remains the path for tag + GitHub release (fires on a
+# package.json version bump or manual dispatch).
 #
-# PREFER `gh workflow run auto-release.yml --ref master` for recovery / first
-# publish: a manual dispatch there lands a COMPLETE release (npm + tag +
-# GitHub release), idempotently. Use THIS workflow only when you deliberately
-# want to push to npm WITHOUT creating a tag or release — it leaves git/npm
-# out of sync, which is what stranded the original 0.2.0 release.
+# Running this WITHOUT a matching tag/release leaves git/npm out of sync —
+# which is what stranded the original 0.2.0 release. Bump + release first
+# (auto-release.yml), then dispatch this to push that version to npm.
 #
 # Dispatch-only on purpose. A `release: published` trigger here would
-# double-fire against auto-release.yml (which CREATES the release), and the
-# second `npm publish` would fail "cannot publish over existing version".
+# double-fire against auto-release.yml's own npm step ("cannot publish over
+# existing version").
 
 on:
   workflow_dispatch:
@@ -28,10 +28,13 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 22
+          # Trusted publishing (OIDC) needs npm >=11.5.1; Node 24 bundles npm 11.
+          # Runtime floor stays engines.node >=20 — ci.yml tests 20/22.
+          node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
       - run: npm ci
       - run: npm test
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Auth = OIDC via the npmjs.com trusted publisher bound to THIS workflow
+      # filename (publish.yml) — no NPM_TOKEN. Provenance is automatic under OIDC.
+      - run: npm publish --access public
