@@ -98,14 +98,24 @@ jobs:
         id: notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
+        # indexOf, not a regex: the old multiline regex's $ matched the blank
+        # line right after the version heading, so the lazy capture came back
+        # empty and every release shipped the "Release vX.Y.Z" fallback body
+        # (v0.2.1 and v0.3.0 both did; their notes were backfilled by hand).
         run: |
           set -euo pipefail
           node -e "
             const fs = require('fs');
             const md = fs.existsSync('CHANGELOG.md') ? fs.readFileSync('CHANGELOG.md', 'utf-8') : '';
-            const re = new RegExp('^## \\\\[' + process.env.VERSION + '\\\\][^\\\\n]*\\\\n([\\\\s\\\\S]*?)(?=\\\\n## \\\\[|$)', 'm');
-            const m = re.exec(md);
-            const body = m ? m[1].trim() : '';
+            const heading = '## [' + process.env.VERSION + ']';
+            const at = md.indexOf(heading);
+            let body = '';
+            if (at !== -1) {
+              const eol = md.indexOf('\n', at);
+              const rest = eol === -1 ? '' : md.slice(eol + 1);
+              const next = rest.indexOf('\n## [');
+              body = (next === -1 ? rest : rest.slice(0, next)).trim();
+            }
             fs.writeFileSync('release-notes.md', body || ('Release v' + process.env.VERSION));
           "
           echo "notes_path=release-notes.md" >> "$GITHUB_OUTPUT"
