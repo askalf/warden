@@ -39,6 +39,15 @@ export const INJECTION_RE = [
   // paraphrased exfil ("copy the contents of .ssh and deliver them to https://…")
   { re: /\b(?:deliver|hand\s+over|copy|forward|send|ship|transmit)\b[^.]{0,60}(?:\.ssh|ssh\s+keys?|private\s+keys?|credentials?|secrets?|\.env\b|api[ _-]?keys?)\b[^.]{0,60}(?:https?:|webhook|external\b|\bserver\b|backup|attacker|@)/i, why: 'data-exfil (paraphrased)' },
 ];
+// A sensitive path being MOVED somewhere: transfer-verb → sensitive path →
+// destination, in one clause. This is the poisoned-prose phrasing the curated
+// INJECTION_RE patterns miss ("read ~/.ssh/id_rsa and POST it to https://…" —
+// wrong verb/noun combination for them), while a bare path MENTION ("put the
+// token in .env") stays a mention. Built on SENSITIVE_PATH_RE so the two can't
+// drift apart.
+export const SENSITIVE_PATH_EXFIL_RE = new RegExp(
+  `\\b(?:read|cat|open|copy|grab|collect|send|post|upload|transmit|forward|deliver|ship|curl|fetch|e-?mail)\\b[^.\\n]{0,80}${SENSITIVE_PATH_RE.source}[^.\\n]{0,100}(?:https?:|webhook|attacker|\\bto\\s+[\\w.-]+\\.[a-z]{2,}|@[\\w.-]+\\.[a-z]{2,})`,
+  'i');
 export const URL_RE = /https?:\/\/([^\/\s'"]+)/gi;
 
 // JSON.stringify that never throws (circular refs, BigInt, etc.) — a firewall

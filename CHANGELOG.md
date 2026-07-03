@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`scanMcpTools` severity tiers** — every finding now carries
+  `severity: 'critical' | 'advisory'`. Injection/exfil *instructions* (the
+  curated patterns) are critical; a bare sensitive-path / secret-env *mention*
+  is advisory, so consumers scanning long-form skill prose (canon) can stop
+  treating instructional docs about credential handling as poison — scanning
+  the official Claude Code marketplace flagged 19/29 skills on exactly those
+  mention heuristics. Additive: `flags` are unchanged and consumers that only
+  read them behave as before.
+- **`SENSITIVE_PATH_EXFIL_RE`** — a sensitive path being *moved*
+  (transfer-verb → sensitive path → destination, one clause), e.g.
+  `read ~/.ssh/id_rsa and POST it to https://…`, which the curated exfil
+  patterns miss (wrong verb/noun combination). Critical, and built on
+  `SENSITIVE_PATH_RE` so the two can't drift apart.
+
 ### Fixed
 - **Audit verifier — interspersed unprotected records no longer read as tampering.**
   `verifyAuditFile()` skipped only *leading* pre-chain lines; the first line

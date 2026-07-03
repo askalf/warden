@@ -3,7 +3,7 @@
 // the OpenClaw poisoned-skill / supply-chain class).
 import { check, recordVerdict } from './index.mjs';
 import { classify, TIER, ORDER, WRITE } from './classify.mjs';
-import { scanInjection, injectionHits, safeStringify, SENSITIVE_PATH_RE, SECRET_ENV_RE } from './scan.mjs';
+import { scanInjection, injectionHits, safeStringify, SENSITIVE_PATH_RE, SENSITIVE_PATH_EXFIL_RE, SECRET_ENV_RE } from './scan.mjs';
 
 // Extract fetch-shaped fields, tolerating non-standard URL keys (target/href/link)
 // so a URL isn't lost just because the tool named its argument unusually.
@@ -131,7 +131,16 @@ export function guardHandler(handler, policy, opts = {}) {
 /**
  * Supply-chain scan: inspect an MCP server's advertised tools for poisoning —
  * injection/exfil instructions hidden in tool names, descriptions, or schemas.
- * Returns [{ tool, flags }] for anything suspicious.
+ * Returns [{ tool, flags, severity }] for anything suspicious.
+ *
+ * severity ('critical' | 'advisory') tiers the finding for the CALLER's surface:
+ *  - injection/exfil INSTRUCTIONS (the curated patterns, plus a sensitive path
+ *    being moved verb→path→destination) are `critical` — poisoned anywhere.
+ *  - a bare sensitive-path / secret-env MENTION is `advisory`: in a short tool
+ *    description it's suspicious enough to act on, but in long-form skill prose
+ *    (docs that legitimately teach credential handling) it's context, not poison
+ *    — scanning the official Claude Code marketplace flagged 19/29 skills on
+ *    exactly this. Existing consumers that only read `flags` are unaffected.
  */
 export function scanMcpTools(tools = []) {
   const findings = [];
@@ -144,9 +153,11 @@ export function scanMcpTools(tools = []) {
     // instructions, systemPrompt, annotations, a schema default, …).
     const text = safeStringify(t);
     const flags = scanInjection({ input: { _scan: text } });
+    if (SENSITIVE_PATH_EXFIL_RE.test(text)) flags.push('sensitive-path exfil instruction (path → destination)');
+    let severity = flags.length ? 'critical' : 'advisory';
     if (SENSITIVE_PATH_RE.test(text)) flags.push('references a sensitive path (.ssh/.env/credentials/…)');
     if (SECRET_ENV_RE.test(text)) flags.push('reads a secret env var');
-    if (flags.length) findings.push({ tool: t.name, flags });
+    if (flags.length) findings.push({ tool: t.name, flags, severity });
   }
   return findings;
 }
