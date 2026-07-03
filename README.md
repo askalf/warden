@@ -51,7 +51,10 @@ Firewall an MCP server's tool-calls, and scan its advertised tools for poisoning
 import { guardHandler, scanMcpTools } from '@askalf/warden/mcp';
 
 // 1) supply-chain: catch malicious instructions hidden in tool descriptions
-const findings = scanMcpTools(server.tools); // [{ tool, flags }]
+const findings = scanMcpTools(server.tools); // [{ tool, flags, severity }]
+// severity: 'critical' = injection/exfil *instructions*; 'advisory' = a bare
+// sensitive-path / secret-env *mention* — so prose that documents credential
+// handling doesn't read as poison when you scan long-form skill text.
 
 // 2) wrap the tools/call handler — every call is firewalled before it runs
 server.setHandler(guardHandler(realHandler, policy, {
@@ -118,6 +121,14 @@ A node hook pays node's startup + module-load on every tool call (~78ms here). [
 npm run demo   # feeds it OpenClaw-class attacks + benign ops
 npm test       # node --test
 ```
+
+## The arena — an agent-firewall benchmark
+
+```bash
+npm run arena
+```
+
+[`arena/`](arena/) scores **any** agent firewall — not just warden — on the same 234-sample labeled corpus through one language-agnostic pipe, and reports **recall, precision, and determinism together** ([results](arena/RESULTS.md)). The `allow-all` / `block-all` anchor rows show why: block-all gets perfect recall by breaking all your real work, allow-all gets perfect precision by catching nothing — either number alone is meaningless. An adapter is any executable speaking JSONL in / verdicts out ([protocol](arena/protocol.md)); one ships for **LlamaFirewall**, and tools guarding a *different layer* (LLM I/O, network wire) are mapped by threat-model axes instead of force-ranked on a corpus they weren't built for. Honest caveat: the corpus is warden-authored, so warden scoring well on it is expected, not proof — neutrality is earned through outside corpus PRs and more adapters.
 
 ## The agent-security stack
 
