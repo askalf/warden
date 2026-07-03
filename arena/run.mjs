@@ -132,6 +132,9 @@ const results = [];
 for (const a of chosen) {
   const r1 = await runAdapter(a);
   if (!r1.ok) { results.push({ ...a, available: false, reason: r1.reason }); console.error(`- ${a.id}: unavailable (${r1.reason})`); continue; }
+  // Spawned but emitted no verdicts = the tool isn't installed/configured (its
+  // adapter exited early). Mark unavailable rather than scoring a misleading 0%.
+  if (r1.verdicts.size === 0) { results.push({ ...a, available: false, reason: 'no verdicts — tool not installed/configured' }); console.error(`- ${a.id}: unavailable (no verdicts)`); continue; }
   let observedDeterministic = null;
   if (RUNS === 2) {
     const r2 = await runAdapter(a);

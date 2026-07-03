@@ -6,6 +6,10 @@ warden.config.json
 .DS_Store
 dist/
 
+# Python adapter bytecode (arena)
+__pycache__/
+*.pyc
+
 # native fast-hook build artifacts (per-platform; ship via GitHub Releases)
 native/warden-fast
 native/warden-fast.exe

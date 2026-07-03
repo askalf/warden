@@ -77,22 +77,44 @@ node arena/run.mjs               # score all available adapters → RESULTS.md +
 node arena/run.mjs --adapter warden,deny-list
 ```
 
-## Roadmap — firewalls to add
+## Threat-model axes — what actually competes
 
-The harness is built; the next work is competitor adapters. Committed today:
-`warden`, a naive `deny-list` baseline, and the `allow-all` / `block-all`
-anchors. Candidates (in `adapters.json` under `roadmap`):
+"Agent security" is not one problem, and these tools do not sit on the same axis.
+Scoring them all on one corpus without saying so would be a strawman — so here is
+the honest map. **This corpus is agent _tool-call actions_** (shell/exec, fetch,
+write). A tool is a *same-axis* competitor only if it classifies a tool call.
 
-| tool | kind | can we run it unattended? |
+| tool | axis | fair on this corpus? |
 |---|---|---|
-| Meta **LlamaFirewall** (PromptGuard + CodeShield) | OSS, local | yes — pip install, no paid key |
-| **NeMo Guardrails** (NVIDIA) | OSS, LLM-backed | needs a model endpoint; a good *non*-deterministic contrast |
-| **Claw Patrol** (Deno agent firewall) | OSS, local | yes |
-| HF prompt-injection classifier | OSS model, local | yes (injection family only) |
-| **Lakera Guard** | cloud API | needs a paid `LAKERA_API_KEY` — **operator decision** |
+| **warden** | tool-call firewall — classifies each action | **yes** — this is its axis |
+| regex deny-list | tool-call firewall (naive) | yes — the floor |
+| **Meta LlamaFirewall** | LLM-I/O guardrail — PromptGuard (injection text), CodeShield (insecure generated code), AgentAlignment (trace goal-hijack) | **partial** — fair on the **injection** family; expected to *allow* shell RCE (not what it screens) |
+| **NeMo Guardrails** (NVIDIA) | LLM-backed dialog/rail checks | partial + non-deterministic; needs a model endpoint |
+| **Lakera Guard** | LLM-I/O guardrail (cloud) — prompt-injection | partial; paid key |
+| **Claw Patrol** (Deno) | **network-wire gateway** — gates SQL verbs / K8s verb+resource / HTTP path via HCL rules + credential injection | **no — different layer.** It gates protocol traffic on the wire, not tool-call strings, so this corpus can't score it. warden + Claw Patrol are *complementary layers*, not competitors. |
 
-The local/OSS tools can be wired and run here directly; the cloud API needs a
-key and a budget, so that one waits on an explicit call.
+So the deliverable isn't a leaderboard where warden wins — it's a **map**. warden
+and the deny-list are the same-axis rows. LlamaFirewall competes only on the
+injection slice, and its per-family numbers are meant to show it catching
+injection while passing shell RCE — honestly, not as a "loss." Claw Patrol is a
+different layer and is deliberately **not** a row (forcing it onto this corpus
+would be the strawman this section exists to avoid).
+
+## Roadmap — adapters
+
+Committed: `warden`, the `deny-list` baseline, the `allow-all` / `block-all`
+anchors, and a faithful **LlamaFirewall** adapter (`adapters/llamafirewall_adapter.py`)
+that scores the injection slice — it's registered but **unavailable** until
+`pip install llamafirewall` + a configured gated Meta PromptGuard model (HF
+license + token), at which point the runner picks it up automatically. Every
+useful LlamaFirewall scanner needs a gated model (PromptGuard/CodeShield) or a
+paid Together key (AgentAlignment), so a real run is one operator green-light
+away (heavy `torch` install + HF token), not a code gap.
+
+Still open (`adapters.json` → `roadmap`): **NeMo Guardrails** (needs a model
+endpoint; the non-deterministic contrast case) and **Lakera Guard** (paid key).
+**Claw Patrol** is intentionally not on the roadmap as a row — it's a different
+layer (above).
 
 ## Honest caveats
 

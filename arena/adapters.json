@@ -37,13 +37,22 @@
       "offline": true,
       "license": "MIT",
       "notes": "sanity ceiling: 100% recall / 0% precision — proves recall alone is gameable"
+    },
+    {
+      "id": "llamafirewall",
+      "name": "Meta LlamaFirewall (PromptGuard)",
+      "cmd": ["python", "arena/adapters/llamafirewall_adapter.py"],
+      "deterministic": false,
+      "offline": false,
+      "license": "MIT",
+      "homepage": "https://github.com/meta-llama/PurpleLlama",
+      "axis": "llm-io-guardrail",
+      "notes": "PARTIAL-AXIS: an LLM-I/O guardrail; PromptGuard screens prompt-injection TEXT, not shell/tool-call actions. Fair only on the injection family (see README threat-model axes). Adapter is committed but UNAVAILABLE until `pip install llamafirewall` + a configured gated Meta HF model — the runner skips it until then."
     }
   ],
   "roadmap": [
-    { "id": "llamafirewall", "name": "Meta LlamaFirewall", "kind": "oss-local", "license": "MIT", "homepage": "https://github.com/meta-llama/PurpleLlama", "notes": "OSS, pip-installable; PromptGuard scanner runs local (small model), CodeShield is regex/semgrep. Buildable without a paid key." },
-    { "id": "nemo-guardrails", "name": "NVIDIA NeMo Guardrails", "kind": "oss-local-llm", "license": "Apache-2.0", "homepage": "https://github.com/NVIDIA/NeMo-Guardrails", "notes": "OSS but rail checks are LLM-backed → needs a model endpoint (local or API). Non-deterministic; good contrast case." },
-    { "id": "claw-patrol", "name": "Claw Patrol (Deno agent firewall)", "kind": "oss-local", "notes": "OSS, local-runnable; the two-layer comparison from the sprayberrylabs blog." },
-    { "id": "lakera-guard", "name": "Lakera Guard", "kind": "cloud-api", "homepage": "https://www.lakera.ai/", "notes": "cloud API — needs LAKERA_API_KEY (paid). Operator decision before wiring." },
-    { "id": "promptguard-hf", "name": "prompt-injection classifier (HF, local)", "kind": "oss-local-model", "notes": "e.g. a deberta-based injection classifier via transformers; local, non-deterministic-ish. Injection-family only." }
+    { "id": "nemo-guardrails", "name": "NVIDIA NeMo Guardrails", "kind": "oss-local-llm", "axis": "llm-io-guardrail", "license": "Apache-2.0", "homepage": "https://github.com/NVIDIA/NeMo-Guardrails", "notes": "OSS but rail checks are LLM-backed → needs a model endpoint (local or API). Non-deterministic; the determinism-contrast case. Partial-axis (dialog/rail checks, not tool-call classification)." },
+    { "id": "claw-patrol", "name": "Claw Patrol (Deno)", "kind": "different-layer", "axis": "network-wire-gateway", "license": "MIT", "homepage": "https://github.com/denoland/clawpatrol", "notes": "NOT A LEADERBOARD ROW — different layer. Claw Patrol is a network-wire gateway: it parses protocol traffic (SQL verbs, K8s verb/resource, HTTP path) and gates via HCL rules + credential injection. It does not classify shell/tool-call strings, so this corpus cannot fairly score it. warden + Claw Patrol are complementary layers (the sprayberrylabs 'two layers' write-up), not competitors." },
+    { "id": "lakera-guard", "name": "Lakera Guard", "kind": "cloud-api", "axis": "llm-io-guardrail", "homepage": "https://www.lakera.ai/", "notes": "cloud API — needs a paid LAKERA_API_KEY. Partial-axis (prompt-injection). Operator decision (key + budget) before wiring." }
   ]
 }
