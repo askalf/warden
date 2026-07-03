@@ -14,10 +14,10 @@
     "./scan": "./src/scan.mjs"
   },
   "bin": {
-    "warden": "./src/cli.mjs",
-    "warden-mcp": "./src/mcp-proxy-cli.mjs",
-    "warden-hook": "./src/cc-hook.mjs",
-    "warden-serve": "./src/daemon-cli.mjs"
+    "warden": "src/cli.mjs",
+    "warden-mcp": "src/mcp-proxy-cli.mjs",
+    "warden-hook": "src/cc-hook.mjs",
+    "warden-serve": "src/daemon-cli.mjs"
   },
   "scripts": {
     "test": "node --test",
@@ -36,7 +36,10 @@
   "keywords": ["agent", "security", "mcp", "llm", "guardrails", "ai-safety", "firewall", "own-your-stack"],
   "author": "Thomas Sprayberry",
   "license": "MIT",
-  "repository": "github:askalf/warden",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/askalf/warden.git"
+  },
   "engines": { "node": ">=20" },
   "files": ["src"],
   "publishConfig": { "access": "public" }
