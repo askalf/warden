@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Three scanner false-positive classes, measured on 2,000+ real marketplace
+  skills** (auditing the official Claude Code catalog + 9 community
+  marketplaces with canon; every first-pass critical was manually reviewed):
+  - `SENSITIVE_PATH_RE`'s `.env` now requires a non-word lookbehind —
+    `process.env` / `self.env` / `import.meta.env` are code, not the dotenv
+    file, and were the single largest FP source. (Also applied to the
+    data-exfil-to-destination pattern's `.env` noun.)
+  - `scanMcpTools` normalizes stringified newlines (`\n` 2-char escapes) back
+    to real newlines before matching, and `SENSITIVE_PATH_EXFIL_RE`'s gaps stop
+    at both — previously clause-bounded patterns silently spanned lines in
+    JSON-stringified text, so unrelated rows of a markdown table could read as
+    one verb→path→destination "clause".
+  - The bare-word **'exfiltration intent'** rule (exfiltrate/leak/steal, no
+    destination) now tiers as `advisory`, not critical: every corpus hit was
+    descriptive prose — memory leaks, ML data leakage, threat lists in
+    defensive security docs. The flag itself is unchanged, so strict
+    (tool-description) surfaces still act on it.
+
 ### Added
 - **`scanMcpTools` severity tiers** — every finding now carries
   `severity: 'critical' | 'advisory'`. Injection/exfil *instructions* (the

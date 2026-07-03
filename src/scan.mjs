@@ -16,7 +16,10 @@ export const SECRET_RE = [
   { re: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/, why: 'private key' },
 ];
 export const SECRET_ENV_RE = /\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)\w*\}?/i;
-export const SENSITIVE_PATH_RE = /(\.env\b|\.aws[\\/]|\.ssh[\\/]|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/]|[\\/](?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker[\\/]config\.json|\.netrc\b|[\\/]gh[\\/]hosts\.yml|[\\/]gcloud[\\/]|[\\/]\.azure[\\/]|serviceaccount[\\/]token|\.pgpass\b|rclone\.conf|credentials\.tfrc)/i;
+// `.env` needs the lookbehind: `process.env` / `self.env` / `import.meta.env`
+// are ordinary CODE, not the dotenv FILE — scanning real marketplace skills,
+// bare `\.env\b` was the single largest false-positive source.
+export const SENSITIVE_PATH_RE = /((?<!\w)\.env\b|\.aws[\\/]|\.ssh[\\/]|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/]|[\\/](?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker[\\/]config\.json|\.netrc\b|[\\/]gh[\\/]hosts\.yml|[\\/]gcloud[\\/]|[\\/]\.azure[\\/]|serviceaccount[\\/]token|\.pgpass\b|rclone\.conf|credentials\.tfrc)/i;
 // Cloud-instance-metadata hosts, incl. the common numeric encodings of the AWS
 // IMDS IP (169.254.169.254 → decimal/hex/octal) used to evade literal matching.
 export const METADATA_RE = /\b(?:169\.254\.169\.254|2852039166|0xa9fea9fe|0251\.0376\.0251\.0376|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200)\b|\[?(?:fd00:ec2::254|::ffff:a9fe:a9fe)\]?/i;
@@ -30,7 +33,7 @@ export const INJECTION_RE = [
   { re: /disregard[^.]{0,20}(?:safety|guardrail|policy)/i, why: 'safety-bypass instruction' },
   { re: /base64\s+-d\s*\|\s*(?:ba)?sh/i, why: 'obfuscated payload to shell' },
   { re: /send\s+(?:all\s+|the\s+)?(?:files|secrets|env|credentials|keys)[^.]{0,40}(?:https?|webhook|curl)/i, why: 'data-exfil instruction' },
-  { re: /\b(?:e-?mail|send|upload|post|transmit|forward|exfil\w*)\b\s+(?:all\s+|the\s+|every\s+|your\s+)?(?:secrets?|credentials?|api[ _-]?keys?|passwords?|tokens?|private\s+keys?|\.env\b)\b[^.]{0,60}(?:@|https?:|webhook|attacker|to\s+\S+@)/i, why: 'data-exfil instruction (to a destination)' },
+  { re: /\b(?:e-?mail|send|upload|post|transmit|forward|exfil\w*)\b\s+(?:all\s+|the\s+|every\s+|your\s+)?(?:secrets?|credentials?|api[ _-]?keys?|passwords?|tokens?|private\s+keys?|(?<!\w)\.env\b)\b[^.]{0,60}(?:@|https?:|webhook|attacker|to\s+\S+@)/i, why: 'data-exfil instruction (to a destination)' },
   { re: /reveal\s+(?:all\s+|the\s+|your\s+)?(?:secrets|system\s+prompt|prompt|api\s+keys|credentials)/i, why: 'system-prompt/secret extraction' },
   { re: /disregard\s+(?:all\s+|the\s+|your\s+)?(?:system\s+)?(?:prompt|instructions|rules)/i, why: 'instruction-override' },
   { re: /you\s+are\s+now\s+(?:in\s+)?(?:a\s+)?(?:developer|dan|jailbreak|god|unrestricted)\s*-?\s*mode/i, why: 'jailbreak persona' },
@@ -44,9 +47,14 @@ export const INJECTION_RE = [
 // INJECTION_RE patterns miss ("read ~/.ssh/id_rsa and POST it to https://…" —
 // wrong verb/noun combination for them), while a bare path MENTION ("put the
 // token in .env") stays a mention. Built on SENSITIVE_PATH_RE so the two can't
-// drift apart.
+// drift apart. The gaps stop at a real newline AND at a literal `\n` two-char
+// escape: callers often scan JSON-stringified text, where every newline arrives
+// as `\n` — without this, "clause"-bounding silently spans lines and unrelated
+// rows of a table read as verb→path→destination (found scanning real
+// marketplace skills).
+const CLAUSE_GAP = (n) => `(?:(?!\\\\n)[^.\\n]){0,${n}}`;
 export const SENSITIVE_PATH_EXFIL_RE = new RegExp(
-  `\\b(?:read|cat|open|copy|grab|collect|send|post|upload|transmit|forward|deliver|ship|curl|fetch|e-?mail)\\b[^.\\n]{0,80}${SENSITIVE_PATH_RE.source}[^.\\n]{0,100}(?:https?:|webhook|attacker|\\bto\\s+[\\w.-]+\\.[a-z]{2,}|@[\\w.-]+\\.[a-z]{2,})`,
+  `\\b(?:read|cat|open|copy|grab|collect|send|post|upload|transmit|forward|deliver|ship|curl|fetch|e-?mail)\\b${CLAUSE_GAP(80)}${SENSITIVE_PATH_RE.source}${CLAUSE_GAP(100)}(?:https?:|webhook|attacker|\\bto\\s+[\\w.-]+\\.[a-z]{2,}|@[\\w.-]+\\.[a-z]{2,})`,
   'i');
 export const URL_RE = /https?:\/\/([^\/\s'"]+)/gi;
 

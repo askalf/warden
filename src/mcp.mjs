@@ -134,14 +134,19 @@ export function guardHandler(handler, policy, opts = {}) {
  * Returns [{ tool, flags, severity }] for anything suspicious.
  *
  * severity ('critical' | 'advisory') tiers the finding for the CALLER's surface:
- *  - injection/exfil INSTRUCTIONS (the curated patterns, plus a sensitive path
- *    being moved verb→path→destination) are `critical` — poisoned anywhere.
- *  - a bare sensitive-path / secret-env MENTION is `advisory`: in a short tool
- *    description it's suspicious enough to act on, but in long-form skill prose
- *    (docs that legitimately teach credential handling) it's context, not poison
- *    — scanning the official Claude Code marketplace flagged 19/29 skills on
- *    exactly this. Existing consumers that only read `flags` are unaffected.
+ *  - injection/exfil INSTRUCTIONS (the curated destination-bearing patterns,
+ *    instruction-override, a sensitive path being moved verb→path→destination)
+ *    are `critical` — poisoned anywhere.
+ *  - a bare sensitive-path / secret-env MENTION is `advisory`, and so is the
+ *    bare-word 'exfiltration intent' rule (exfiltrate/leak/steal with no
+ *    destination): auditing 2,000+ real marketplace skills, every single hit
+ *    was descriptive prose — memory leaks, ML data leakage, threat lists in
+ *    defensive security docs ("attackers could: steal secrets"). In a short
+ *    tool description those words are still suspicious enough to act on, which
+ *    is exactly what the flag (unchanged) lets strict surfaces do.
+ *    Existing consumers that only read `flags` are unaffected.
  */
+const ADVISORY_WORDS = new Set(['exfiltration intent']);
 export function scanMcpTools(tools = []) {
   const findings = [];
   if (!Array.isArray(tools)) return findings;           // fail-safe: a non-array tool list isn't scannable
@@ -151,10 +156,14 @@ export function scanMcpTools(tools = []) {
     // hand-picked name/description/inputSchema subset: a poisoned instruction or a
     // sensitive-path / secret-env default can hide in ANY field (prompt,
     // instructions, systemPrompt, annotations, a schema default, …).
-    const text = safeStringify(t);
-    const flags = scanInjection({ input: { _scan: text } });
+    // Un-escape the newlines stringify produced before pattern-matching: inside a
+    // JSON string every real newline is the 2-char `\n`, which is neither `.` nor
+    // `\n` to a regex — clause-bounded patterns would silently span lines, and
+    // unrelated rows of a table can read as one verb→path→destination "clause".
+    const text = safeStringify(t).replace(/\\r\\n|\\n|\\r/g, '\n');
+    const flags = injectionHits(text); // NOT scanInjection — that would re-stringify and re-escape the newlines just normalized
     if (SENSITIVE_PATH_EXFIL_RE.test(text)) flags.push('sensitive-path exfil instruction (path → destination)');
-    let severity = flags.length ? 'critical' : 'advisory';
+    let severity = flags.some((w) => !ADVISORY_WORDS.has(w)) ? 'critical' : 'advisory';
     if (SENSITIVE_PATH_RE.test(text)) flags.push('references a sensitive path (.ssh/.env/credentials/…)');
     if (SECRET_ENV_RE.test(text)) flags.push('reads a secret env var');
     if (flags.length) findings.push({ tool: t.name, flags, severity });
