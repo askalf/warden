@@ -32,7 +32,8 @@
     "bench:max": "node bench/maxstress.mjs",
     "bench:native": "node native/bench.mjs",
     "arena": "node arena/run.mjs",
-    "arena:corpus": "node arena/build-corpus.mjs"
+    "arena:corpus": "node arena/build-corpus.mjs",
+    "arena:external": "node arena/run.mjs --corpus external-corpus.json"
   },
   "keywords": ["agent", "security", "mcp", "llm", "guardrails", "ai-safety", "firewall", "own-your-stack"],
   "author": "Thomas Sprayberry",

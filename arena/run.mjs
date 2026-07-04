@@ -3,9 +3,12 @@
 // (see protocol.md). Emits a markdown table (RESULTS.md) + full JSON
 // (results.json), and prints a summary.
 //
-//   node arena/run.mjs                # all available adapters
+//   node arena/run.mjs                # all available adapters, default corpus
 //   node arena/run.mjs --adapter warden,deny-list
 //   node arena/run.mjs --runs 1       # skip the determinism double-run
+//   node arena/run.mjs --corpus external-corpus.json  # score an alternate corpus
+//       (results write to <basename>-results.json + <BASENAME>-RESULTS.md so the
+//        default RESULTS.md/results.json are never clobbered)
 //
 // The adapter sees only the action, never the label: `expect`/`family`/`label`
 // are stripped before feeding, so nothing can read the answer key.
@@ -17,10 +20,15 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(here, '..');
 
-const corpus = JSON.parse(fs.readFileSync(path.join(here, 'corpus.json'), 'utf8'));
+const arg = (name, d) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : d; };
+const corpusFile = arg('--corpus', 'corpus.json');
+const isDefault = corpusFile === 'corpus.json';
+const mdOut = isDefault ? 'RESULTS.md' : path.basename(corpusFile).replace(/\.json$/, '').toUpperCase() + '-RESULTS.md';
+const jsonOut = isDefault ? 'results.json' : path.basename(corpusFile).replace(/\.json$/, '') + '-results.json';
+
+const corpus = JSON.parse(fs.readFileSync(path.join(here, corpusFile), 'utf8'));
 const registry = JSON.parse(fs.readFileSync(path.join(here, 'adapters.json'), 'utf8'));
 
-const arg = (name, d) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : d; };
 const only = (arg('--adapter', '') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const RUNS = Number(arg('--runs', '2')) === 1 ? 1 : 2;
 
@@ -163,7 +171,8 @@ const md = [
   '# Arena results',
   '',
   `Corpus: **${corpus.total} samples** · ${corpus.families.length} families · ${corpus.counts.block} malicious / ${corpus.counts.approve} risky / ${corpus.counts.allow} benign.`,
-  `Scored ${avail.length} firewall(s) through the same stdin/stdout pipe (see [protocol.md](protocol.md)). Regenerate: \`node arena/run.mjs\`.`,
+  corpus.provenance ? `> ${corpus.provenance}` : '',
+  `Scored ${avail.length} firewall(s) through the same stdin/stdout pipe (see [protocol.md](protocol.md)). Regenerate: \`node arena/run.mjs${isDefault ? '' : ' --corpus ' + corpusFile}\`.`,
   '',
   ...head,
   ...rows,
@@ -177,14 +186,14 @@ const md = [
   '',
 ].join('\n');
 
-fs.writeFileSync(path.join(here, 'RESULTS.md'), md);
-fs.writeFileSync(path.join(here, 'results.json'), JSON.stringify({ corpus: { total: corpus.total, families: corpus.families, counts: corpus.counts }, results }, null, 2) + '\n');
+fs.writeFileSync(path.join(here, mdOut), md);
+fs.writeFileSync(path.join(here, jsonOut), JSON.stringify({ corpus: { total: corpus.total, families: corpus.families, counts: corpus.counts }, results }, null, 2) + '\n');
 
 // console summary
-console.log(`\narena — ${corpus.total} samples, ${avail.length} firewall(s)\n`);
+console.log(`\narena (${corpusFile}) — ${corpus.total} samples, ${avail.length} firewall(s)\n`);
 for (const r of avail) {
   console.log(`  ${r.name.padEnd(28)} recall ${pf(r.recallBlock).padStart(6)} (+gate ${pf(r.recallPrevent).padStart(6)})  precision ${pf(r.precision).padStart(6)}  under-gate ${r.underGate}/${r.risky}  determ ${det(r)}`);
 }
 const unavail = results.filter((r) => !r.available);
 if (unavail.length) console.log(`\n  unavailable: ${unavail.map((r) => r.id).join(', ')} (not installed / no key — expected for roadmap tools)`);
-console.log(`\nwrote RESULTS.md + results.json\n`);
+console.log(`\nwrote ${mdOut} + ${jsonOut}\n`);
