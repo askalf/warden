@@ -6,7 +6,7 @@ import { stubJudge, makeJudge } from '../src/judge.mjs';
 test('makeJudge reads the verdict past a thinking block (multi-content)', async () => {
   const orig = globalThis.fetch;
   // extended-thinking response: a thinking block FIRST, then the JSON text block.
-  globalThis.fetch = async () => ({ json: async () => ({ content: [{ type: 'thinking', thinking: 'X=rm so $X is rm…' }, { type: 'text', text: '{"tier":"black","reason":"deobfuscates to rm -rf /"}' }] }) });
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ content: [{ type: 'thinking', thinking: 'X=rm so $X is rm…' }, { type: 'text', text: '{"tier":"black","reason":"deobfuscates to rm -rf /"}' }] }) });
   try {
     const j = makeJudge({ endpoint: 'http://stub' });
     const r = await j({ tool: 'shell', input: { command: 'X=rm; $X -rf /' } }, { tier: 'green', why: [] });
@@ -79,4 +79,41 @@ test('judge failure is fail-safe (keeps deterministic verdict)', async () => {
   const judge = async () => { throw new Error('endpoint down'); };
   const v = await checkAsync({ tool: 'write', input: { path: 'src/x' } }, {}, { judge });
   assert.equal(v.decision, 'allow'); // yellow stays allow; failure didn't crash
+});
+
+// The jailbreak/compromise threat: a judge that hands back green must not be
+// able to WEAKEN the deterministic verdict — only raise it. checkAsync escalates
+// only on a strictly-higher tier, so a green reply is ignored on a gray/allow.
+test('a compromised judge returning green cannot lower a gray/allow verdict', async () => {
+  const green = async () => ({ tier: 'green', reason: 'looks fine to me (compromised)' });
+  const v = await checkAsync({ tool: 'shell', input: { command: 'X=rm; $X -rf /' } }, {}, { judge: green });
+  assert.equal(v.decision, 'allow');                    // unchanged — never "more allowed"
+  assert.ok(!v.why.some((w) => /judge escalated/.test(w)));
+});
+
+test('makeJudge fails safe on a non-OK HTTP response (null, never throws)', async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 429, json: async () => { throw new Error('HTML error body'); } });
+  try {
+    const judge = makeJudge({ endpoint: 'http://stub', apiKey: 'x' });
+    let out;
+    await assert.doesNotReject(async () => { out = await judge({ tool: 'shell', input: { command: 'X=rm; $X -rf /' } }, { tier: 'yellow', why: ['gray'] }); });
+    assert.equal(out, null);
+    // end-to-end: a judge HTTP failure leaves the deterministic verdict intact
+    // (makeJudge returns null gracefully, so it never even reaches checkAsync's
+    // throw-catch — the gray action simply stays allow, unescalated).
+    const v = await checkAsync({ tool: 'shell', input: { command: 'X=rm; $X -rf /' } }, {}, { judge });
+    assert.equal(v.decision, 'allow');
+    assert.ok(!v.why.some((w) => /judge escalated/.test(w)));
+  } finally { globalThis.fetch = orig; }
+});
+
+test('makeJudge fails safe on a malformed (non-JSON) body', async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+  try {
+    const judge = makeJudge({ endpoint: 'http://stub', apiKey: 'x' });
+    const out = await judge({ tool: 'shell', input: { command: 'X=rm; $X -rf /' } }, { tier: 'yellow', why: ['gray'] });
+    assert.equal(out, null);
+  } finally { globalThis.fetch = orig; }
 });
