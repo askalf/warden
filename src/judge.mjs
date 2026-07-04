@@ -21,10 +21,10 @@ Respond with ONLY a compact JSON object: {"tier":"green|yellow|red|black","reaso
 
 /**
  * Build a judge function bound to an Anthropic-compatible endpoint.
- *   makeJudge({ endpoint:'https://api.anthropic.com', model:'claude-sonnet-4-6' })
+ *   makeJudge({ endpoint:'https://api.anthropic.com', model:'claude-sonnet-5' })
  * Returns async (action, verdict) => { tier, reason }.
  */
-export function makeJudge({ endpoint = 'https://api.anthropic.com', apiKey = process.env.ANTHROPIC_API_KEY, model = 'claude-sonnet-4-6', timeoutMs = 8000 } = {}) {
+export function makeJudge({ endpoint = 'https://api.anthropic.com', apiKey = process.env.ANTHROPIC_API_KEY, model = 'claude-sonnet-5', timeoutMs = 8000 } = {}) {
   return async function judge(action, verdict) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -39,14 +39,23 @@ export function makeJudge({ endpoint = 'https://api.anthropic.com', apiKey = pro
           messages: [{ role: 'user', content: `Firewall tier: ${verdict.tier}\nReasons: ${verdict.why.join('; ')}\nAction: ${JSON.stringify(action)}` }],
         }),
       });
-      const data = await res.json();
+      // Fail safe: a non-2xx (rate limit, auth error, 5xx returning an HTML
+      // body) must yield null, not throw on res.json() — checkAsync then keeps
+      // the deterministic verdict rather than the judge failing the whole call.
+      if (!res.ok) return null;
+      let data = null;
+      try { data = await res.json(); } catch { return null; }
       // Concatenate text across ALL content blocks — endpoints with extended
       // thinking emit a thinking block first, so the JSON verdict is not in
       // content[0]. Reading only content[0].text silently misses it.
       const text = (Array.isArray(data?.content) ? data.content.map((b) => b?.text || '').join('') : '').trim();
       const m = text.match(/\{[\s\S]*\}/);
-      const parsed = m ? JSON.parse(m[0]) : null;
+      let parsed = null;
+      try { parsed = m ? JSON.parse(m[0]) : null; } catch { return null; }
       if (parsed && [TIER.GREEN, TIER.YELLOW, TIER.RED, TIER.BLACK].includes(parsed.tier)) return parsed;
+      return null;
+    } catch {
+      // network error / abort / timeout → null (fail-safe; never throw into the host)
       return null;
     } finally {
       clearTimeout(t);
