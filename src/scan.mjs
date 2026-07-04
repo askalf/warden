@@ -19,7 +19,7 @@ export const SECRET_ENV_RE = /\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)\w
 // `.env` needs the lookbehind: `process.env` / `self.env` / `import.meta.env`
 // are ordinary CODE, not the dotenv FILE — scanning real marketplace skills,
 // bare `\.env\b` was the single largest false-positive source.
-export const SENSITIVE_PATH_RE = /((?<!\w)\.env\b|\.aws[\\/]|\.ssh[\\/]|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/]|[\\/](?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker[\\/]config\.json|\.netrc\b|[\\/]gh[\\/]hosts\.yml|[\\/]gcloud[\\/]|[\\/]\.azure[\\/]|serviceaccount[\\/]token|\.pgpass\b|rclone\.conf|credentials\.tfrc)/i;
+export const SENSITIVE_PATH_RE = /((?<!\w)\.env\b|\.aws[\\/]|\.ssh[\\/]|\.gnupg[\\/]|secring\.gpg\b|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/]|[\\/](?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker[\\/]config\.json|\.netrc\b|[\\/]gh[\\/]hosts\.yml|[\\/]gcloud[\\/]|[\\/]\.azure[\\/]|serviceaccount[\\/]token|\.pgpass\b|rclone\.conf|credentials\.tfrc|[\\/]etc[\\/]shadow\b)/i;
 // Cloud-instance-metadata hosts, incl. the common numeric encodings of the AWS
 // IMDS IP (169.254.169.254 → decimal/hex/octal) used to evade literal matching.
 export const METADATA_RE = /\b(?:169\.254\.169\.254|2852039166|0xa9fea9fe|0251\.0376\.0251\.0376|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200)\b|\[?(?:fd00:ec2::254|::ffff:a9fe:a9fe)\]?/i;

