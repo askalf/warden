@@ -1,6 +1,6 @@
 // warden — own your agent security. A guard between an agent and its tools.
 import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
-import { scanSecrets, injectionHits, obfuscationHits, isExternal, ipScope, safeStringify, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
+import { scanSecrets, injectionHits, obfuscationHits, isExternal, ipScope, safeStringify, asStr, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
 import { matchRule, DEFAULT_POLICY, loadPolicy, normalizePolicy } from './policy.mjs';
 import { AuditLog } from './audit.mjs';
 
@@ -25,7 +25,7 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   // Normalize so a malformed policy (e.g. a scalar `allow`) can NEVER make the
   // rule-matching below throw — a guard error must not fail OPEN on a black action.
   const { allow, deny, egressAllow, writeRoots } = normalizePolicy(policy);
-  const tool = String(action.tool || '').toLowerCase();
+  const tool = asStr(action.tool || '').toLowerCase();
   const base = classify(action);
   // Bound the scanned text. Secrets / injection phrases / metadata hosts that
   // matter appear early, and the classifier already caps the command at 16KB —
@@ -52,7 +52,11 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   }
   // injection: a poisoned skill is always black; injection in an executable arg is black;
   // injection patterns in passive file content are flagged red (it's data, not execution).
-  const injSkill = injectionHits(skillText || '');
+  // Fail-safe: skillText is a documented entrypoint arg. A non-string (Symbol,
+  // number, object) must classify safely, never throw — a Symbol reaching the
+  // scanner's regex .test() would raise "Cannot convert a Symbol to a string"
+  // and crash the host. Coerce anything non-string to '' (no scannable text).
+  const injSkill = injectionHits(typeof skillText === 'string' ? skillText : '');
   if (injSkill.length) { tier = TIER.BLACK; why.push(...injSkill.map((f) => '☠ poisoned-skill: ' + f)); }
   // Injection scanning targets DATA the agent consumes (skill text, file content,
   // request bodies) — NOT shell-command args. A human running `echo "ignore all

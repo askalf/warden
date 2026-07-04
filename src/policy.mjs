@@ -1,7 +1,7 @@
 // Policy: allow/deny rules + egress allowlist + write roots. Loadable from a
 // .warden.json file (Claude-Code-style rule syntax: `tool(glob)`).
 import fs from 'node:fs';
-import { safeStringify } from './scan.mjs';
+import { safeStringify, asStr } from './scan.mjs';
 
 export const DEFAULT_POLICY = { allow: [], deny: [], egressAllow: [], writeRoots: null };
 
@@ -35,7 +35,7 @@ export function matchRule(rule, action) {
   const m = /^(\w+)\((.*)\)$/.exec(rule);
   if (!m) return false;
   const [, t, pat] = m;
-  if (t.toLowerCase() !== String((action && action.tool) || '').toLowerCase()) return false;
+  if (t.toLowerCase() !== asStr((action && action.tool) || '').toLowerCase()) return false;
   const i = (action && action.input) || {};
   const subject = i.command || i.path || i.url || i;
   // Coerce safely: a string is itself; an array (split command) joins via

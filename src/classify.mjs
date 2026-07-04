@@ -1,5 +1,5 @@
 // Risk classification for agent tool-calls. Deterministic, offline, fast.
-import { safeStringify, URL_RE, isExternal } from './scan.mjs';
+import { safeStringify, asStr, URL_RE, isExternal } from './scan.mjs';
 export const TIER = { GREEN: 'green', YELLOW: 'yellow', RED: 'red', BLACK: 'black' };
 export const ORDER = { green: 0, yellow: 1, red: 2, black: 3 };
 export const worst = (a, b) => (ORDER[a] >= ORDER[b] ? a : b);
@@ -223,7 +223,7 @@ export function classify(action) {
   // String() (not .toLowerCase() on the raw value) so a non-string tool — number,
   // object, Symbol, array from a malformed/poisoned call — fails SAFE to an
   // unknown-tool classification instead of throwing into the host agent.
-  const tool = String(action.tool || '').toLowerCase();
+  const tool = asStr(action.tool || '').toLowerCase();
   const input = action.input || {};
   const why = [];
   let tier = TIER.GREEN;
@@ -282,7 +282,7 @@ export function classify(action) {
   } else if (['delete', 'rm', 'unlink'].includes(tool)) {
     tier = TIER.RED; why.push('⚠ file deletion');
   } else if (NET.includes(tool)) {
-    const m = String(input.method || 'GET').toUpperCase();
+    const m = asStr(input.method || 'GET').toUpperCase();
     if (m !== 'GET' && m !== 'HEAD') { tier = TIER.RED; why.push('⚠ outbound ' + m); } else why.push('· outbound GET');
   } else if (READONLY.includes(tool)) {
     why.push('· read-only');

@@ -70,6 +70,13 @@ export function safeStringify(v) {
   } catch { try { return String(v); } catch { return ''; } }
 }
 
+// Symbol-safe scalar-string coercion. Implicit String(array) invokes Array.join,
+// whose internal ToString THROWS on a Symbol element (e.g. a malformed
+// `tool: [Symbol]` or `method: [Symbol]`); the String() *function* is symbol-safe,
+// so map it. Unlike safeStringify this keeps a plain string plain (no JSON
+// quoting) — the tool/method comparisons that use it rely on that.
+export const asStr = (v) => { try { return Array.isArray(v) ? v.map(asStr).join(',') : v == null ? '' : String(v); } catch { return ''; } };
+
 // Is `host` a destination OUTSIDE this machine/allowlist? Parses out userinfo
 // and port and anchors loopback/private ranges, so `localhost.attacker.com`,
 // `127.0.0.1.evil.com`, and `[2001:db8::1]` are correctly treated as EXTERNAL
