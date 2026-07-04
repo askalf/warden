@@ -11,7 +11,8 @@
     "./daemon": "./src/daemon.mjs",
     "./client": "./src/client.mjs",
     "./audit": "./src/audit.mjs",
-    "./scan": "./src/scan.mjs"
+    "./scan": "./src/scan.mjs",
+    "./taint": "./src/taint.mjs"
   },
   "bin": {
     "warden": "src/cli.mjs",
