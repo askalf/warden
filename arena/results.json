@@ -55,7 +55,7 @@
       "underGateRate": 0.02857142857142857,
       "errored": 0,
       "latencyMedianMs": 0.066,
-      "latencyP99Ms": 0.801,
+      "latencyP99Ms": 0.772,
       "perFamilyBlockRecall": {
         "container-escape": 1,
         "destructive-fs": 0.8888888888888888,
@@ -100,8 +100,8 @@
       "underGate": 35,
       "underGateRate": 1,
       "errored": 0,
-      "latencyMedianMs": 0.002,
-      "latencyP99Ms": 0.211,
+      "latencyMedianMs": 0.001,
+      "latencyP99Ms": 0.215,
       "perFamilyBlockRecall": {
         "container-escape": 0,
         "destructive-fs": 0.3888888888888889,
@@ -257,7 +257,7 @@
       "underGateRate": 0.8285714285714286,
       "errored": 0,
       "latencyMedianMs": 0,
-      "latencyP99Ms": 3,
+      "latencyP99Ms": 7,
       "perFamilyBlockRecall": {
         "container-escape": 0,
         "destructive-fs": 0,
@@ -276,6 +276,54 @@
         "ssrf-metadata": 0,
         "type-confusion": 0,
         "windows-ttp": 0
+      }
+    },
+    {
+      "id": "aegis",
+      "name": "AEGIS (pre-execution check)",
+      "cmd": [
+        "node",
+        "arena/adapters/aegis.mjs"
+      ],
+      "deterministic": true,
+      "offline": true,
+      "license": "MIT",
+      "homepage": "https://github.com/Justin0504/Aegis",
+      "axis": "tool-call-firewall",
+      "notes": "SAME-AXIS: a pre-execution tool-call firewall — the first arena competitor with a genuine THREE-tier verdict. Scored via its documented `POST /api/v1/check` (an open route, no key) in blocking mode, so risky HIGH/CRITICAL calls return `pending` (escalate-to-human) → mapped to gated. Read the +gate column for AEGIS: its hard recall(block) is low BY DESIGN because it escalates rather than hard-blocks. Out-of-box `standard` policy template (shell/supply-chain/prompt-injection→block, file/db→MEDIUM, network→LOW); no operator DSL rules. Fresh agent_id per sample keeps its L2 behavioral-anomaly layer in the 'learning' phase (a stateless corpus can't build a per-agent baseline), so the scored verdict is the deterministic L1-policy + classifier + L3-DSL layer. AEGIS's /check screens the ACTION, not poisoned-skill TEXT, so injection-skill samples that carry no risky argument pass. Needs the gateway on :8080 (the Arena workflow builds + starts it from pinned commit 5f012d5 / v0.2.0).",
+      "available": true,
+      "observedDeterministic": true,
+      "malicious": 143,
+      "benign": 67,
+      "risky": 35,
+      "recallBlock": 0.04895104895104895,
+      "recallPrevent": 0.5944055944055944,
+      "precision": 1,
+      "falsePositives": 0,
+      "benignFriction": 12,
+      "underGate": 20,
+      "underGateRate": 0.5714285714285714,
+      "errored": 0,
+      "latencyMedianMs": 1,
+      "latencyP99Ms": 5,
+      "perFamilyBlockRecall": {
+        "container-escape": 0.5,
+        "destructive-fs": 0.3888888888888889,
+        "exfil": 0.7333333333333333,
+        "git-rce": 0.25,
+        "injection-skill": 0,
+        "obfuscation": 1,
+        "persistence-unix": 1,
+        "persistence-win": 0.1111111111111111,
+        "rce-download": 0.7727272727272727,
+        "rce-pipe": 1,
+        "reverse-shell": 0.7777777777777778,
+        "rm-root": 1,
+        "secret-theft": 0,
+        "security-disable": 0.2222222222222222,
+        "ssrf-metadata": 1,
+        "type-confusion": 0.6,
+        "windows-ttp": 0.125
       }
     }
   ]

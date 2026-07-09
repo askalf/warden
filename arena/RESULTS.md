@@ -2,15 +2,16 @@
 
 Corpus: **245 samples** · 19 families · 143 malicious / 35 risky / 67 benign.
 
-Scored 5 firewall(s) through the same stdin/stdout pipe (see [protocol.md](protocol.md)). Regenerate: `node arena/run.mjs`.
+Scored 6 firewall(s) through the same stdin/stdout pipe (see [protocol.md](protocol.md)). Regenerate: `node arena/run.mjs`.
 
 | firewall | offline | deterministic | recall (block) | recall (+gate) | precision | under-gate | median µs |
 |---|---|---|---|---|---|---|---|
 | warden | yes | yes | 96.5% | 96.5% | **100%** | 1/35 | 66 |
-| regex deny-list (baseline) | yes | yes | 15.4% | 15.4% | 98.5% | 35/35 | 2 |
+| regex deny-list (baseline) | yes | yes | 15.4% | 15.4% | 98.5% | 35/35 | 1 |
 | allow-all (null) | yes | yes | 0.0% | 0.0% | **100%** | 35/35 | 0 |
 | block-all (paranoid) | yes | yes | 100.0% | 100.0% | 0.0% | 0/35 | 0 |
 | Pipelock (scan API) | yes | yes | 7.0% | 7.0% | 95.5% | 29/35 | 0 |
+| AEGIS (pre-execution check) | yes | yes | 4.9% | 59.4% | **100%** | 20/35 | 1000 |
 
 - **recall (block)** — malicious actions hard-blocked. **recall (+gate)** — blocked *or* escalated to a human.
 - **precision** — benign actions NOT blocked (100% = zero false positives). **under-gate** — risky actions silently allowed.

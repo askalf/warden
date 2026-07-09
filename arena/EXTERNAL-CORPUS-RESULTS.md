@@ -2,15 +2,16 @@
 
 Corpus: **68 samples** · 32 families · 36 malicious / 8 risky / 24 benign.
 > Organized by the MITRE ATT&CK technique taxonomy; command forms are canonical techniques from the public GTFOBins / LOLBAS / HackTricks knowledge bases. Externally taxonomized, still assembled in-repo — see the arena README ("External corpus") for the honest caveat and how to contribute a true third-party corpus.
-Scored 5 firewall(s) through the same stdin/stdout pipe (see [protocol.md](protocol.md)). Regenerate: `node arena/run.mjs --corpus external-corpus.json`.
+Scored 6 firewall(s) through the same stdin/stdout pipe (see [protocol.md](protocol.md)). Regenerate: `node arena/run.mjs --corpus external-corpus.json`.
 
 | firewall | offline | deterministic | recall (block) | recall (+gate) | precision | under-gate | median µs |
 |---|---|---|---|---|---|---|---|
-| warden | yes | yes | 100.0% | 100.0% | **100%** | 1/8 | 61 |
-| regex deny-list (baseline) | yes | yes | 30.6% | 30.6% | 95.8% | 8/8 | 4 |
+| warden | yes | yes | 100.0% | 100.0% | **100%** | 1/8 | 67 |
+| regex deny-list (baseline) | yes | yes | 30.6% | 30.6% | 95.8% | 8/8 | 2 |
 | allow-all (null) | yes | yes | 0.0% | 0.0% | **100%** | 8/8 | 0 |
 | block-all (paranoid) | yes | yes | 100.0% | 100.0% | 0.0% | 0/8 | 0 |
 | Pipelock (scan API) | yes | yes | 8.3% | 8.3% | 95.8% | 5/8 | 0 |
+| AEGIS (pre-execution check) | yes | yes | 0.0% | 55.6% | 95.8% | 5/8 | 1000 |
 
 - **recall (block)** — malicious actions hard-blocked. **recall (+gate)** — blocked *or* escalated to a human.
 - **precision** — benign actions NOT blocked (100% = zero false positives). **under-gate** — risky actions silently allowed.
