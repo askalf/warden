@@ -16,15 +16,18 @@ It sits between an agent and its tools, and on every action it:
 
 Deterministic and offline by default (zero runtime deps). An optional **LLM judge tier** refines gray-zone calls — and it can only *raise* risk, never lower a block.
 
-Coverage is **measured, not assumed**: `npm run bench` scores a 234-sample labeled corpus across 19 attack families (RCE, destruction, exfil, SSRF, persistence, security-disabling, container escape, prompt-injection, argument-injection, …) and reports recall + false-positive rate. Today: **96% deterministic recall, 100% precision (zero false positives)**. The remaining ~4% is the *evasion bucket* — `X=rm; $X`, `${IFS}` padding, hex/base64-encoded payloads that a regex can't safely deobfuscate — which warden deterministically routes to the optional [LLM judge](#optional-llm-judge) instead of guessing. Three adversarial batteries (`bench/edgecases.mjs`, `bench/stress.mjs`, `bench/stress2.mjs`) and a ReDoS guard (`bench/redos.mjs` — every pattern under 1ms at the 16 KB input cap) keep it honest. Threat model: [SECURITY.md](SECURITY.md).
+Coverage is **measured, not assumed**: `npm run bench` scores a 245-sample labeled corpus across 19 attack families (RCE, destruction, exfil, SSRF, persistence, security-disabling, container escape, prompt-injection, argument-injection, …) and reports recall + false-positive rate. Today: **97% deterministic recall, 100% precision (zero false positives)**. The remaining ~3% is the *evasion bucket* — `X=rm; $X`, `${IFS}` padding, hex/base64-encoded payloads that a regex can't safely deobfuscate — which warden deterministically routes to the optional [LLM judge](#optional-llm-judge) instead of guessing. Three adversarial batteries (`bench/edgecases.mjs`, `bench/stress.mjs`, `bench/stress2.mjs`) and a ReDoS guard (`bench/redos.mjs` — every pattern under 1ms at the 16 KB input cap) keep it honest. Threat model: [SECURITY.md](SECURITY.md).
 
 ## Quick start
 
 > Not yet on npm — installs straight from GitHub:
 
 ```sh
-npm i github:askalf/warden
+npm i github:askalf/warden          # npm ≤ 11
+npm i --allow-git github:askalf/warden   # npm ≥ 12 blocks git deps by default
 ```
+
+> [npm v12 blocks git dependencies by default](https://github.blog/changelog/2026-06-09-upcoming-breaking-changes-for-npm-v12/) (a supply-chain hardening warden applauds — it closes an `.npmrc`-overrides-git RCE path). warden has zero dependencies and no install scripts, so `--allow-git` is the only flag you need.
 
 ```js
 import { check, AuditLog } from '@askalf/warden';
@@ -146,7 +149,7 @@ npm test       # node --test
 npm run arena
 ```
 
-[`arena/`](arena/) scores **any** agent firewall — not just warden — on the same 234-sample labeled corpus through one language-agnostic pipe, and reports **recall, precision, and determinism together** ([results](arena/RESULTS.md)). The `allow-all` / `block-all` anchor rows show why: block-all gets perfect recall by breaking all your real work, allow-all gets perfect precision by catching nothing — either number alone is meaningless. An adapter is any executable speaking JSONL in / verdicts out ([protocol](arena/protocol.md)); one ships for **LlamaFirewall**, and tools guarding a *different layer* (LLM I/O, network wire) are mapped by threat-model axes instead of force-ranked on a corpus they weren't built for. Honest caveat: the corpus is warden-authored, so warden scoring well on it is expected, not proof — neutrality is earned through outside corpus PRs and more adapters.
+[`arena/`](arena/) scores **any** agent firewall — not just warden — on the same 245-sample labeled corpus through one language-agnostic pipe, and reports **recall, precision, and determinism together** ([results](arena/RESULTS.md)). The `allow-all` / `block-all` anchor rows show why: block-all gets perfect recall by breaking all your real work, allow-all gets perfect precision by catching nothing — either number alone is meaningless. An adapter is any executable speaking JSONL in / verdicts out ([protocol](arena/protocol.md)); one ships for **LlamaFirewall**, and tools guarding a *different layer* (LLM I/O, network wire) are mapped by threat-model axes instead of force-ranked on a corpus they weren't built for. Honest caveat: the corpus is warden-authored, so warden scoring well on it is expected, not proof — neutrality is earned through outside corpus PRs and more adapters.
 
 ## The agent-security stack
 

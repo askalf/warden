@@ -1,6 +1,6 @@
 {
   "name": "@askalf/warden",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "own your agent security — a guard between an agent and its tools: risk classification, policy, secret-exfil + prompt-injection defense, tamper-evident audit, MCP middleware. Part of Own Your Stack.",
   "type": "module",
   "exports": {
@@ -35,14 +35,29 @@
     "arena:corpus": "node arena/build-corpus.mjs",
     "arena:external": "node arena/run.mjs --corpus external-corpus.json"
   },
-  "keywords": ["agent", "security", "mcp", "llm", "guardrails", "ai-safety", "firewall", "own-your-stack"],
+  "keywords": [
+    "agent",
+    "security",
+    "mcp",
+    "llm",
+    "guardrails",
+    "ai-safety",
+    "firewall",
+    "own-your-stack"
+  ],
   "author": "Thomas Sprayberry",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/askalf/warden.git"
   },
-  "engines": { "node": ">=20" },
-  "files": ["src"],
-  "publishConfig": { "access": "public" }
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

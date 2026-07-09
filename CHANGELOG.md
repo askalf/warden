@@ -4,6 +4,68 @@ All notable changes to **@askalf/warden** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-07-09
+
+### Added
+- **Cross-call taint tracking — `TaintSession`** (`@askalf/warden/taint`, #34).
+  `check()` classifies one call in isolation, which an attacker evades by
+  splitting an exfil across calls: read a secret into a temp file (call 1 — a
+  sensitive *read*), then ship that file out (call 2 — *benign*, no visible
+  secret). `TaintSession` remembers the session: secret **sources** (reads of
+  `~/.ssh`, `.env`, `.aws/credentials`, …), **propagation** (the file a secret
+  is written to — and any copy — becomes tainted), and external **sinks**,
+  escalating to black the moment tainted data leaves the machine.
+  `checkSequence(actions, policy)` runs a whole stream through one session.
+  Deterministic and offline; like the judge it can only **raise** risk, never
+  lower a verdict — wrapping a stream is always at least as safe as per-call
+  `check()`. Precision-scoped: config-read → **allowlisted** host is not
+  flagged. The stateless core is untouched (byte-identical `decide()`).
+- **External MITRE ATT&CK arena corpus** (#36) — the default arena corpus is
+  warden-authored, so warden topping it proves capability, not neutrality.
+  `arena/external-corpus.json` adds 68 samples across 32 MITRE ATT&CK
+  techniques, command forms drawn from the public GTFOBins / LOLBAS /
+  HackTricks knowledge bases, with benign uses of the *same* tools so precision
+  is a genuine test. `node arena/run.mjs --corpus <file>` / `npm run
+  arena:external`; results in `arena/EXTERNAL-CORPUS-RESULTS.md` (warden: 100%
+  recall, 100% precision after the #33 coverage work — the corpus originally
+  cross-flagged the same two gaps #33 closed). Honest caveat documented:
+  externally taxonomized but still assembled in-repo; true neutrality needs an
+  outside-contributed corpus, and the protocol makes that a drop-in.
+- **Six measured classifier coverage gaps closed** (#33), each mechanism-scoped
+  and checked against the benign set: recursive `chmod` of the root/system tree
+  (any mode — `000` locks root out, not just `777`); staged
+  download→make-executable chained with `;` as well as `&&`; `rundll32
+  javascript:` protocol exec (LOLBin) → black; gnupg keyring
+  (`.gnupg/secring.gpg`) in `SENSITIVE_PATH_RE`; `/etc/shadow` reads gated
+  (distinct from world-readable `/etc/passwd`, which stays allow); `vssadmin
+  create shadow` gated (dual-use NTDS-theft prep — the ransomware
+  delete-shadows variant stays black). Corpus +11 → 245 samples; recall
+  96% → **97%**, precision held at **100%**.
+
+### Changed
+- Default judge model freshened to `claude-sonnet-5` (#35).
+- README: quick-start notes that **npm v12 blocks git dependencies by
+  default** — until warden is on npm, `npm i github:askalf/warden` needs
+  `--allow-git` on npm ≥ 12.
+
+### Fixed
+- **Judge tier fail-safe + raise-only proof** (#35). `makeJudge` no longer
+  throws into the host on a bad response (explicit `res.ok` check — a 429/5xx
+  returning HTML used to throw at `res.json()`; wrapped JSON parse; catch-all):
+  every failure mode returns null and `checkAsync` keeps the deterministic
+  verdict. And the invariant that a compromised/jailbroken judge can only
+  *raise* risk is now pinned by tests — a judge answering green cannot clear a
+  black or weaken a verdict.
+- **Fuzz-found fail-safe gaps at the entrypoints** (#32): `tool`/`method`
+  arriving as an array containing a `Symbol` (implicit `String(array)` →
+  `Array.join` → TypeError), and non-string `skillText` reaching the injection
+  scanner's regex, could throw instead of failing safe to a verdict. A shared
+  symbol-safe `asStr()` coercion now guards every site; found by 1M-iteration
+  fuzzing, pinned by regression tests. Detection unchanged.
+- **CI release notes** (#30): extraction uses `indexOf`, not a multiline regex
+  whose `$` matched the blank line after the heading and shipped empty bodies
+  (v0.2.1 and v0.3.0 notes were backfilled by hand).
+
 ## [0.3.0] - 2026-07-03
 
 ### Added
