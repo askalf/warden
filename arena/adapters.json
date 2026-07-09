@@ -59,6 +59,17 @@
       "homepage": "https://github.com/luckyPipewrench/pipelock",
       "axis": "egress-dlp-gateway",
       "notes": "PARTIAL-AXIS: Pipelock's primary layer is the egress wire (proxy DLP / SSRF / injection scanning); its documented per-call surface is the on-demand Scan API, which is what this adapter drives. Every sample gets every applicable kind (tool_call + dlp on the command string + prompt_injection on skill text), deny from any = block — composition can only raise its recall. Out-of-box posture: no mcp_tool_policy rules (operator-written rules would raise recall on command-semantics families — PRs welcome). Binary allow/deny. Needs a running daemon: `pipelock run --config arena/adapters/pipelock.arena.yaml` (the Arena workflow does this; pinned v3.0.0)."
+    },
+    {
+      "id": "aegis",
+      "name": "AEGIS (pre-execution check)",
+      "cmd": ["node", "arena/adapters/aegis.mjs"],
+      "deterministic": true,
+      "offline": true,
+      "license": "MIT",
+      "homepage": "https://github.com/Justin0504/Aegis",
+      "axis": "tool-call-firewall",
+      "notes": "SAME-AXIS: a pre-execution tool-call firewall — the first arena competitor with a genuine THREE-tier verdict. Scored via its documented `POST /api/v1/check` (an open route, no key) in blocking mode, so risky HIGH/CRITICAL calls return `pending` (escalate-to-human) → mapped to gated. Read the +gate column for AEGIS: its hard recall(block) is low BY DESIGN because it escalates rather than hard-blocks. Out-of-box `standard` policy template (shell/supply-chain/prompt-injection→block, file/db→MEDIUM, network→LOW); no operator DSL rules. Fresh agent_id per sample keeps its L2 behavioral-anomaly layer in the 'learning' phase (a stateless corpus can't build a per-agent baseline), so the scored verdict is the deterministic L1-policy + classifier + L3-DSL layer. AEGIS's /check screens the ACTION, not poisoned-skill TEXT, so injection-skill samples that carry no risky argument pass. Needs the gateway on :8080 (the Arena workflow builds + starts it from pinned commit 5f012d5 / v0.2.0)."
     }
   ],
   "roadmap": [

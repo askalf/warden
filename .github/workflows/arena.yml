@@ -5,8 +5,11 @@ name: Arena
 # scoreboard reproducible: anyone can re-run the numbers by re-running this
 # workflow, on a neutral host neither tool's author controls.
 #
-# Pipelock is downloaded as a pinned release artifact and verified against a
-# hardcoded sha256 before it runs.
+# Competitors run live, pinned:
+#   - Pipelock — downloaded as a pinned release artifact, verified against a
+#     hardcoded sha256 before it runs.
+#   - AEGIS — built from a pinned git commit (no published image) and started
+#     as its documented docker/gateway container.
 
 on:
   pull_request:
@@ -22,6 +25,8 @@ permissions:
 env:
   PIPELOCK_VERSION: 3.0.0
   PIPELOCK_SHA256: 3a9ceb11ab42f5a65bf0c440f01f5ee44e073663dd6a757d720c4a566b85c120
+  # AEGIS v0.2.0 (2026-06-29) — pinned by commit, verified after checkout.
+  AEGIS_COMMIT: 5f012d58111df8774e27b7f7c0bbb61fb2f9574f
 
 jobs:
   arena:
@@ -61,30 +66,57 @@ jobs:
           done
           echo "scan API never came up; daemon log:"; cat /tmp/pipelock.log; exit 1
 
+      - name: Build + start AEGIS gateway (pinned commit)
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/Justin0504/Aegis.git /tmp/aegis
+          git -C /tmp/aegis fetch --depth 1 origin "$AEGIS_COMMIT"
+          git -C /tmp/aegis checkout "$AEGIS_COMMIT"
+          got=$(git -C /tmp/aegis rev-parse HEAD)
+          test "$got" = "$AEGIS_COMMIT" || { echo "AEGIS commit mismatch: $got != $AEGIS_COMMIT"; exit 1; }
+          docker build -t aegis-gateway:pinned -f /tmp/aegis/docker/gateway.Dockerfile /tmp/aegis
+          # DB_PATH defaults to ./agentguard.db (cwd /app, root-owned) but the
+          # image runs as USER node — point it at /data, which the Dockerfile
+          # creates writable, or the gateway crashes on first write.
+          docker run -d --name aegis -p 8080:8080 -e DB_PATH=/data/agentguard.db aegis-gateway:pinned
+          echo "waiting for AEGIS gateway…"
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/health || true)
+            if [ "$code" = "200" ]; then echo "AEGIS up"; exit 0; fi
+            sleep 2
+          done
+          echo "AEGIS never came up; container log:"; docker logs aegis || true; exit 1
+
       - name: Run arena (default corpus)
         run: node arena/run.mjs
 
       - name: Run arena (external MITRE ATT&CK corpus)
         run: node arena/run.mjs --corpus external-corpus.json
 
-      - name: Assert pipelock was actually scored
+      - name: Assert competitors were actually scored
         run: |
           set -euo pipefail
           node -e "
             for (const f of ['arena/results.json', 'arena/external-corpus-results.json']) {
               const rs = require('./' + f).results;
-              const p = rs.find((r) => r.id === 'pipelock');
-              if (!p || !p.available) {
-                console.error(f + ': pipelock missing or unavailable — ' + JSON.stringify(p && p.reason));
-                process.exit(1);
-              }
-              if (p.errored > 5) {
-                console.error(f + ': pipelock errored on ' + p.errored + ' samples — check /tmp/pipelock.log');
-                process.exit(1);
+              for (const id of ['pipelock', 'aegis']) {
+                const p = rs.find((r) => r.id === id);
+                if (!p || !p.available) {
+                  console.error(f + ': ' + id + ' missing or unavailable — ' + JSON.stringify(p && p.reason));
+                  process.exit(1);
+                }
+                if (p.errored > 5) {
+                  console.error(f + ': ' + id + ' errored on ' + p.errored + ' samples');
+                  process.exit(1);
+                }
               }
             }
-            console.log('pipelock scored on both corpora');
+            console.log('pipelock + aegis scored on both corpora');
           "
+
+      - name: Dump AEGIS log
+        if: always()
+        run: docker logs aegis > /tmp/aegis.log 2>&1 || true
 
       - name: Upload results
         if: always()
@@ -97,3 +129,4 @@ jobs:
             arena/EXTERNAL-CORPUS-RESULTS.md
             arena/external-corpus-results.json
             /tmp/pipelock.log
+            /tmp/aegis.log

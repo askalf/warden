@@ -18,28 +18,37 @@ See **[RESULTS.md](RESULTS.md)** (regenerate any time with `node arena/run.mjs`,
 or re-run the [Arena workflow](../.github/workflows/arena.yml) — the committed
 tables are CI-generated, all rows scored on the same neutral host).
 
-| firewall | recall (block) | precision | under-gate | deterministic |
-|---|---|---|---|---|
-| **warden** (default, offline) | **96.5%** | **100%** | 1/35 | yes |
-| regex deny-list (naive baseline) | 15.4% | 98.5% | 35/35 | yes |
-| **Pipelock** v3.0.0 (scan API, out-of-box) | 7.0% | 95.5% | 29/35 | yes |
-| allow-all (null) | 0% | 100% | 35/35 | yes |
-| block-all (paranoid) | 100% | 0% | 0/35 | yes |
+| firewall | recall (block) | recall (+gate) | precision | under-gate | deterministic |
+|---|---|---|---|---|---|
+| **warden** (default, offline) | **96.5%** | **96.5%** | **100%** | 1/35 | yes |
+| regex deny-list (naive baseline) | 15.4% | 15.4% | 98.5% | 35/35 | yes |
+| **Pipelock** v3.0.0 (scan API, out-of-box) | 7.0% | 7.0% | 95.5% | 29/35 | yes |
+| **AEGIS** v0.2.0 (pre-execution `/check`, blocking) | 4.9% | **59.4%** | **100%** | 20/35 | yes |
+| allow-all (null) | 0% | 0% | 100% | 35/35 | yes |
+| block-all (paranoid) | 100% | 100% | 0% | 0/35 | yes |
 
 The two anchors are the point: **block-all** gets perfect recall by blocking all
 your real work; **allow-all** gets perfect precision by catching nothing. A
 useful firewall is the one that keeps recall high *and* precision at 100% — which
 is why both columns are always shown together.
 
-Read the Pipelock row through the axes map below, not as a head-to-head loss:
-its per-family results are exactly its declared shape — it catches **exfil**
-(40%) and **poisoned-skill injection** (80%), the families where a credential or
-injection string is present in the call, and scores zero on shell-*semantics*
-families (`rm -rf /` carries no credential or URL — Pipelock's primary
-enforcement for those lives at its egress wire, and an operator-written
-`mcp_tool_policy` would move its number substantially). The row answers one
-narrow, honest question: *out of the box, what does each tool's per-call verdict
-surface catch on this corpus?*
+Two competitor rows, each read through the axes map below rather than as a
+head-to-head loss:
+
+- **Pipelock** catches exactly its declared shape — **exfil** (40%) and
+  **poisoned-skill injection** (80%), the families where a credential or
+  injection string is present in the call — and scores zero on shell-*semantics*
+  families (`rm -rf /` carries no credential or URL; its primary enforcement for
+  those lives at its egress wire, and an operator-written `mcp_tool_policy` would
+  move the number substantially).
+- **AEGIS** is why the **+gate** column exists. Run in blocking mode it *escalates*
+  risky calls to a human (`pending`) rather than hard-blocking them, so its
+  hard-block recall (4.9%) is near-zero **by design** while its +gate recall —
+  blocked *or* escalated — is **59.4%**, at **100% precision** (zero benign hard-
+  blocked). The cost of that posture shows up as *friction*: 12 benign actions
+  also got sent for human review. Read the +gate column for a human-in-the-loop
+  tool; reading its block column alone is the exact misread this benchmark is
+  built to prevent.
 
 ## What's measured, and why each matters
 
@@ -101,18 +110,22 @@ write). A tool is a *same-axis* competitor only if it classifies a tool call.
 |---|---|---|
 | **warden** | tool-call firewall — classifies each action | **yes** — this is its axis |
 | regex deny-list | tool-call firewall (naive) | yes — the floor |
+| **AEGIS** | **tool-call firewall** — pre-execution `/check` classifies each action into allow / block / **pending** (human review) | **yes — same axis.** The first competitor with a real three-tier verdict; scored in blocking mode so risky calls escalate to `pending` (→ gated). Read its **+gate** column: hard recall(block) is low *by design* because it escalates rather than hard-blocks. Its behavioral-anomaly layer needs a per-agent baseline a one-shot corpus can't build, so the scored surface is its static policy + classifier + DSL. Screens the *action*, not poisoned-skill *text*. |
 | **Meta LlamaFirewall** | LLM-I/O guardrail — PromptGuard (injection text), CodeShield (insecure generated code), AgentAlignment (trace goal-hijack) | **partial** — fair on the **injection** family; expected to *allow* shell RCE (not what it screens) |
 | **Pipelock** | **egress-DLP gateway** — proxy that scans wire traffic (HTTP/MCP/WebSocket) for credential exfil, SSRF, injection; plus an on-demand **Scan API** for per-call verdicts | **partial** — scored via its documented Scan API (`tool_call` + `dlp` + `prompt_injection`, deny-from-any). Expected strong on credential-exfil / exfil-URL / injection families; its default install has no shell-*semantics* classifier (`rm -rf /` carries no credential or URL), so destruction/RCE families land at its wire layer only when the payload actually egresses. An operator-written `mcp_tool_policy` would change that — the arena runs the out-of-box posture. |
 | **NeMo Guardrails** (NVIDIA) | LLM-backed dialog/rail checks | partial + non-deterministic; needs a model endpoint |
 | **Lakera Guard** | LLM-I/O guardrail (cloud) — prompt-injection | partial; paid key |
 | **Claw Patrol** (Deno) | **network-wire gateway** — gates SQL verbs / K8s verb+resource / HTTP path via HCL rules + credential injection | **no — different layer.** It gates protocol traffic on the wire, not tool-call strings, so this corpus can't score it. warden + Claw Patrol are *complementary layers*, not competitors. |
 
-So the deliverable isn't a leaderboard where warden wins — it's a **map**. warden
-and the deny-list are the same-axis rows. LlamaFirewall competes only on the
-injection slice, and its per-family numbers are meant to show it catching
-injection while passing shell RCE — honestly, not as a "loss." Claw Patrol is a
-different layer and is deliberately **not** a row (forcing it onto this corpus
-would be the strawman this section exists to avoid).
+So the deliverable isn't a leaderboard where warden wins — it's a **map**. warden,
+the deny-list, and **AEGIS** are the same-axis rows (AEGIS being the one that
+answers "escalate to a human" where warden answers "approve" — the +gate column
+is where you read both fairly). LlamaFirewall competes only on the injection
+slice, and its per-family numbers are meant to show it catching injection while
+passing shell RCE — honestly, not as a "loss." Pipelock is an egress-DLP gateway
+scored on its per-call API surface. Claw Patrol is a different layer and is
+deliberately **not** a row (forcing it onto this corpus would be the strawman
+this section exists to avoid).
 
 ## Roadmap — adapters
 
@@ -124,10 +137,13 @@ license + token), at which point the runner picks it up automatically (every
 useful LlamaFirewall scanner needs a gated model or a paid Together key, so a
 real run is one operator green-light away, not a code gap) — and a
 **Pipelock** adapter (`adapters/pipelock.mjs`) that drives its Scan API with
-every applicable kind per sample. Pipelock runs live in CI: the
-[Arena workflow](../.github/workflows/arena.yml) downloads the pinned release
-(sha256-verified), starts the daemon, and scores the full arena on every PR
-that touches it — the numbers regenerate on a neutral host, on demand.
+every applicable kind per sample, and an **AEGIS** adapter (`adapters/aegis.mjs`)
+that drives its pre-execution `/check` in blocking mode (the first three-tier
+competitor). Both run live in CI: the [Arena workflow](../.github/workflows/arena.yml)
+pins each competitor (Pipelock by sha256-verified release, AEGIS by git commit
+built into its gateway container), starts it, scores the full arena on every PR
+that touches it, and asserts each competitor actually scored — so the numbers
+regenerate on a neutral host, on demand.
 
 Still open (`adapters.json` → `roadmap`): **NeMo Guardrails** (needs a model
 endpoint; the non-deterministic contrast case), **Lakera Guard** (paid key),
@@ -155,11 +171,12 @@ node arena/build-external-corpus.mjs   # regenerate the corpus
 Results ([EXTERNAL-CORPUS-RESULTS.md](EXTERNAL-CORPUS-RESULTS.md)) — 68 samples,
 32 ATT&CK techniques, scored through the same pipe:
 
-| firewall | recall (block) | precision | under-gate |
-|---|---|---|---|
-| **warden** (default, offline) | **100%** | **100%** | 1/8 |
-| regex deny-list (baseline) | 30.6% | 95.8% | 8/8 |
-| Pipelock v3.0.0 (scan API, out-of-box) | 8.3% | 95.8% | 5/8 |
+| firewall | recall (block) | recall (+gate) | precision | under-gate |
+|---|---|---|---|---|
+| **warden** (default, offline) | **100%** | **100%** | **100%** | 1/8 |
+| regex deny-list (baseline) | 30.6% | 30.6% | 95.8% | 8/8 |
+| Pipelock v3.0.0 (scan API, out-of-box) | 8.3% | 8.3% | 95.8% | 5/8 |
+| AEGIS v0.2.0 (pre-execution `/check`, blocking) | 0.0% | 55.6% | 95.8% | 5/8 |
 
 warden catches **every** ATT&CK-technique attack (36/36) at **100% precision** —
 **zero benign commands blocked** despite the shared-tool benign set. The single
