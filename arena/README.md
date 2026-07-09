@@ -89,6 +89,7 @@ write). A tool is a *same-axis* competitor only if it classifies a tool call.
 | **warden** | tool-call firewall — classifies each action | **yes** — this is its axis |
 | regex deny-list | tool-call firewall (naive) | yes — the floor |
 | **Meta LlamaFirewall** | LLM-I/O guardrail — PromptGuard (injection text), CodeShield (insecure generated code), AgentAlignment (trace goal-hijack) | **partial** — fair on the **injection** family; expected to *allow* shell RCE (not what it screens) |
+| **Pipelock** | **egress-DLP gateway** — proxy that scans wire traffic (HTTP/MCP/WebSocket) for credential exfil, SSRF, injection; plus an on-demand **Scan API** for per-call verdicts | **partial** — scored via its documented Scan API (`tool_call` + `dlp` + `prompt_injection`, deny-from-any). Expected strong on credential-exfil / exfil-URL / injection families; its default install has no shell-*semantics* classifier (`rm -rf /` carries no credential or URL), so destruction/RCE families land at its wire layer only when the payload actually egresses. An operator-written `mcp_tool_policy` would change that — the arena runs the out-of-box posture. |
 | **NeMo Guardrails** (NVIDIA) | LLM-backed dialog/rail checks | partial + non-deterministic; needs a model endpoint |
 | **Lakera Guard** | LLM-I/O guardrail (cloud) — prompt-injection | partial; paid key |
 | **Claw Patrol** (Deno) | **network-wire gateway** — gates SQL verbs / K8s verb+resource / HTTP path via HCL rules + credential injection | **no — different layer.** It gates protocol traffic on the wire, not tool-call strings, so this corpus can't score it. warden + Claw Patrol are *complementary layers*, not competitors. |
@@ -103,18 +104,22 @@ would be the strawman this section exists to avoid).
 ## Roadmap — adapters
 
 Committed: `warden`, the `deny-list` baseline, the `allow-all` / `block-all`
-anchors, and a faithful **LlamaFirewall** adapter (`adapters/llamafirewall_adapter.py`)
-that scores the injection slice — it's registered but **unavailable** until
+anchors, a faithful **LlamaFirewall** adapter (`adapters/llamafirewall_adapter.py`)
+that scores the injection slice — registered but **unavailable** until
 `pip install llamafirewall` + a configured gated Meta PromptGuard model (HF
-license + token), at which point the runner picks it up automatically. Every
-useful LlamaFirewall scanner needs a gated model (PromptGuard/CodeShield) or a
-paid Together key (AgentAlignment), so a real run is one operator green-light
-away (heavy `torch` install + HF token), not a code gap.
+license + token), at which point the runner picks it up automatically (every
+useful LlamaFirewall scanner needs a gated model or a paid Together key, so a
+real run is one operator green-light away, not a code gap) — and a
+**Pipelock** adapter (`adapters/pipelock.mjs`) that drives its Scan API with
+every applicable kind per sample. Pipelock runs live in CI: the
+[Arena workflow](../.github/workflows/arena.yml) downloads the pinned release
+(sha256-verified), starts the daemon, and scores the full arena on every PR
+that touches it — the numbers regenerate on a neutral host, on demand.
 
 Still open (`adapters.json` → `roadmap`): **NeMo Guardrails** (needs a model
-endpoint; the non-deterministic contrast case) and **Lakera Guard** (paid key).
-**Claw Patrol** is intentionally not on the roadmap as a row — it's a different
-layer (above).
+endpoint; the non-deterministic contrast case), **Lakera Guard** (paid key),
+and **mcp-firewall** (OSS MCP gateway — same-axis candidate). **Claw Patrol**
+is intentionally not on the roadmap as a row — it's a different layer (above).
 
 ## External corpus (MITRE ATT&CK)
 

@@ -1,0 +1,99 @@
+name: Arena
+
+# Runs the full agent-firewall arena — including live competitor adapters —
+# on every PR that touches the arena, and on demand. This is what makes the
+# scoreboard reproducible: anyone can re-run the numbers by re-running this
+# workflow, on a neutral host neither tool's author controls.
+#
+# Pipelock is downloaded as a pinned release artifact and verified against a
+# hardcoded sha256 before it runs.
+
+on:
+  pull_request:
+    paths:
+      - 'arena/**'
+      - 'src/**'
+      - '.github/workflows/arena.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  PIPELOCK_VERSION: 3.0.0
+  PIPELOCK_SHA256: 3a9ceb11ab42f5a65bf0c440f01f5ee44e073663dd6a757d720c4a566b85c120
+
+jobs:
+  arena:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+
+      - name: Download pipelock (pinned) + verify sha256
+        run: |
+          set -euo pipefail
+          curl -sSL -o "pipelock_${PIPELOCK_VERSION}_linux_amd64.tar.gz" \
+            "https://github.com/luckyPipewrench/pipelock/releases/download/v${PIPELOCK_VERSION}/pipelock_${PIPELOCK_VERSION}_linux_amd64.tar.gz"
+          echo "${PIPELOCK_SHA256}  pipelock_${PIPELOCK_VERSION}_linux_amd64.tar.gz" | sha256sum -c -
+          mkdir -p /tmp/pipelock-dist
+          tar -xzf "pipelock_${PIPELOCK_VERSION}_linux_amd64.tar.gz" -C /tmp/pipelock-dist
+          PL_BIN=$(find /tmp/pipelock-dist -type f -name pipelock | head -n1)
+          test -n "$PL_BIN"
+          chmod +x "$PL_BIN"
+          echo "PL_BIN=$PL_BIN" >> "$GITHUB_ENV"
+          "$PL_BIN" --version || true
+
+      - name: Start pipelock scan API
+        run: |
+          set -euo pipefail
+          nohup "$PL_BIN" run --config arena/adapters/pipelock.arena.yaml > /tmp/pipelock.log 2>&1 &
+          echo "waiting for scan API…"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:9090/api/v1/scan \
+              -H 'Authorization: Bearer arena-token' -H 'Content-Type: application/json' \
+              -d '{"kind":"tool_call","input":{"tool_name":"healthcheck"}}' || true)
+            if [ "$code" = "200" ]; then echo "scan API up"; exit 0; fi
+            sleep 1
+          done
+          echo "scan API never came up; daemon log:"; cat /tmp/pipelock.log; exit 1
+
+      - name: Run arena (default corpus)
+        run: node arena/run.mjs
+
+      - name: Run arena (external MITRE ATT&CK corpus)
+        run: node arena/run.mjs --corpus external-corpus.json
+
+      - name: Assert pipelock was actually scored
+        run: |
+          set -euo pipefail
+          node -e "
+            for (const f of ['arena/results.json', 'arena/external-corpus-results.json']) {
+              const rs = require('./' + f).results;
+              const p = rs.find((r) => r.id === 'pipelock');
+              if (!p || !p.available) {
+                console.error(f + ': pipelock missing or unavailable — ' + JSON.stringify(p && p.reason));
+                process.exit(1);
+              }
+              if (p.errored > 5) {
+                console.error(f + ': pipelock errored on ' + p.errored + ' samples — check /tmp/pipelock.log');
+                process.exit(1);
+              }
+            }
+            console.log('pipelock scored on both corpora');
+          "
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: arena-results
+          path: |
+            arena/RESULTS.md
+            arena/results.json
+            arena/EXTERNAL-CORPUS-RESULTS.md
+            arena/external-corpus-results.json
+            /tmp/pipelock.log

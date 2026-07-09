@@ -1,0 +1,24 @@
+# Pipelock config for the arena benchmark run — out-of-box posture
+# (mode: balanced is Pipelock's default), plus the Scan API listener the
+# adapter talks to. No mcp_tool_policy rules are configured: the arena scores
+# the default install, and notes that operator-written tool-policy rules would
+# raise recall on command-semantics families.
+#
+# The bearer token below is NOT a secret — it authenticates a loopback-only
+# benchmark daemon that lives for the duration of one CI job.
+version: 1
+mode: balanced
+enforce: true
+scan_api:
+  listen: "127.0.0.1:9090"
+  auth:
+    bearer_tokens:
+      - "arena-token"
+  rate_limit:
+    requests_per_minute: 100000
+    burst: 1000
+  kinds:
+    url: true
+    dlp: true
+    prompt_injection: true
+    tool_call: true
