@@ -75,7 +75,10 @@ jobs:
           got=$(git -C /tmp/aegis rev-parse HEAD)
           test "$got" = "$AEGIS_COMMIT" || { echo "AEGIS commit mismatch: $got != $AEGIS_COMMIT"; exit 1; }
           docker build -t aegis-gateway:pinned -f /tmp/aegis/docker/gateway.Dockerfile /tmp/aegis
-          docker run -d --name aegis -p 8080:8080 aegis-gateway:pinned
+          # DB_PATH defaults to ./agentguard.db (cwd /app, root-owned) but the
+          # image runs as USER node — point it at /data, which the Dockerfile
+          # creates writable, or the gateway crashes on first write.
+          docker run -d --name aegis -p 8080:8080 -e DB_PATH=/data/agentguard.db aegis-gateway:pinned
           echo "waiting for AEGIS gateway…"
           for i in $(seq 1 60); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/health || true)
