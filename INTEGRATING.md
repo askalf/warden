@@ -1,25 +1,25 @@
-# Integrating warden into a fleet
+# Integrating redstamp into a fleet
 
-Three surfaces, depending on how an agent runs. Until `@askalf/warden` is published, depend on it with a path: `"@askalf/warden": "file:../warden"` (swap to a version on publish).
+Three surfaces, depending on how an agent runs. Until `@askalf/redstamp` is published, depend on it with a path: `"@askalf/redstamp": "file:../redstamp"` (swap to a version on publish).
 
 ## 1. Claude Code (operator sessions, hands in Claude-Login mode, dock) — DONE
 Register the PreToolUse hook in `~/.claude/settings.json` (a new group beside any existing hooks):
 ```json
 { "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|Read|WebFetch|WebSearch|Grep|Glob",
-  "hooks": [ { "type": "command", "command": "node /path/to/warden/src/cc-hook.mjs", "timeout": 15 } ] }
+  "hooks": [ { "type": "command", "command": "node /path/to/redstamp/src/cc-hook.mjs", "timeout": 15 } ] }
 ```
-Policy: `~/.warden/config.json`. Audit: `~/.warden/audit.jsonl`. Posture: deny-black / defer-rest / ask-red-if-`strict`. Fail-open.
+Policy: `~/.redstamp/config.json`. Audit: `~/.redstamp/audit.jsonl`. Posture: deny-black / defer-rest / ask-red-if-`strict`. Fail-open.
 
 ## 2. Any executor (agent's task runner, custom loops) — `guardExecutor`
 Wrap the native executor in one line:
 ```js
-import { guardExecutor, WardenBlocked } from '@askalf/warden/wrap';
-import { loadPolicy, AuditLog } from '@askalf/warden';
+import { guardExecutor, WardenBlocked } from '@askalf/redstamp/wrap';
+import { loadPolicy, AuditLog } from '@askalf/redstamp';
 
 const audit = new AuditLog();
 const safeShell = guardExecutor(runShellCommand, {
   toAction: (cmd) => ({ tool: 'shell', input: { command: cmd } }),
-  policy: loadPolicy('warden.config.json'),
+  policy: loadPolicy('redstamp.config.json'),
   audit,
   onApprove: async (action, v) => askOperator(action, v), // omit -> fail-closed
 });
@@ -30,7 +30,7 @@ await safeShell('rm -rf /');   // throws WardenBlocked (black)
 ## 3. Anthropic-SDK tool loops (hands SDK mode, the platform forge) — `guardToolUse`
 Before dispatching each `tool_use` block from the model:
 ```js
-import { guardToolUse } from '@askalf/warden/wrap';
+import { guardToolUse } from '@askalf/redstamp/wrap';
 
 for (const block of response.content) {
   if (block.type !== 'tool_use') continue;
@@ -44,7 +44,7 @@ for (const block of response.content) {
 ## 4. MCP servers (any MCP-based agent) — the stdio proxy
 No code change — wrap the server:
 ```bash
-warden-mcp --policy warden.config.json -- npx -y @modelcontextprotocol/server-filesystem /workspace
+redstamp-mcp --policy redstamp.config.json -- npx -y @modelcontextprotocol/server-filesystem /workspace
 ```
 
 ---

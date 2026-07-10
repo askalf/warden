@@ -58,7 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          marker='<!-- warden-npm-token-rot -->'
+          marker='<!-- redstamp-npm-token-rot -->'
           existing=$(gh issue list -R "${{ github.repository }}" --state open --search "in:body $marker" --json number --jq '.[0].number // ""')
           if [ -n "$existing" ]; then
             echo "Existing open token-rot issue #$existing — leaving alone."
@@ -73,16 +73,16 @@ jobs:
             echo ""
             echo "Daily \`npm whoami\` check could not authenticate to the npm registry. The token is likely expired, revoked, or has had its scopes changed."
             echo ""
-            echo "**Impact:** the next \`@askalf/warden\` release will fail at npm publish. \`auto-release.yml\` uses a one-axis gate (HEAD vs HEAD^1 version diff) which cannot detect 'npm is behind the latest release' — a stranded release will NOT auto-recover on later merges. Manual dispatch of \`auto-release.yml\` is required after the secret is fixed."
+            echo "**Impact:** the next \`@askalf/redstamp\` release will fail at npm publish. \`auto-release.yml\` uses a one-axis gate (HEAD vs HEAD^1 version diff) which cannot detect 'npm is behind the latest release' — a stranded release will NOT auto-recover on later merges. Manual dispatch of \`auto-release.yml\` is required after the secret is fixed."
             echo ""
             echo "### To fix"
             echo ""
             echo "1. npmjs.com -> Access Tokens -> **Generate New Token** -> **Granular Access Token**"
-            echo "2. Scope: \`@askalf/*\` (or just \`@askalf/warden\`) with **Read and write** permission"
+            echo "2. Scope: \`@askalf/*\` (or just \`@askalf/redstamp\`) with **Read and write** permission"
             echo "3. Copy the token (\`npm_xxxxx...\`)"
-            echo "4. \`gh secret set NPM_TOKEN -R askalf/warden\` (paste when prompted)"
-            echo "5. Verify token: \`gh workflow run npm-token-health.yml -R askalf/warden\` — this issue auto-closes when the next health check passes"
-            echo "6. Backfill any stranded release: \`gh workflow run auto-release.yml -R askalf/warden --ref master\` — a manual dispatch ignores the version-diff gate and lands a COMPLETE release (npm publish + git tag + GitHub release) for whatever's in package.json on master, idempotently. (\`publish.yml\` only does npm — no tag/release.)"
+            echo "4. \`gh secret set NPM_TOKEN -R askalf/redstamp\` (paste when prompted)"
+            echo "5. Verify token: \`gh workflow run npm-token-health.yml -R askalf/redstamp\` — this issue auto-closes when the next health check passes"
+            echo "6. Backfill any stranded release: \`gh workflow run auto-release.yml -R askalf/redstamp --ref master\` — a manual dispatch ignores the version-diff gate and lands a COMPLETE release (npm publish + git tag + GitHub release) for whatever's in package.json on master, idempotently. (\`publish.yml\` only does npm — no tag/release.)"
             echo ""
             echo "### whoami output"
             echo ""
@@ -106,7 +106,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          marker='<!-- warden-npm-token-rot -->'
+          marker='<!-- redstamp-npm-token-rot -->'
           open_issues=$(gh issue list -R "${{ github.repository }}" --state open --search "in:body $marker" --json number --jq '.[].number')
           for n in $open_issues; do
             gh issue close "$n" -R "${{ github.repository }}" --comment "Auto-closed: \`npm whoami\` succeeded on [run #${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). Token healthy again."

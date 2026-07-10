@@ -1,6 +1,10 @@
 # Changelog
 
-All notable changes to **@askalf/warden** are documented here. The format is
+## 0.4.1
+
+- **Renamed: `@askalf/warden` → `@askalf/redstamp`** (npm-publishable name; the old name collides with an existing unscoped package and is create-blocked by the registry). GitHub repo becomes `askalf/redstamp` (old URLs redirect). Legacy `warden`/`warden-mcp`/`warden-hook`/`warden-serve` bin aliases retained alongside the new `redstamp*` bins. `WARDEN_*` env vars unchanged.
+
+All notable changes to **@askalf/redstamp** (formerly `@askalf/warden`) are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
