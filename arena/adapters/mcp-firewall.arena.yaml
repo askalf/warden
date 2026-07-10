@@ -1,0 +1,60 @@
+# mcp-firewall config for the arena — the documented starter posture
+# (exactly what `mcp-firewall init` writes; see docs/getting-started.md),
+# with ONE operational change: globalRateLimit disabled. The default 200-call
+# global window would deny the last ~45 of the 245-sample corpus on rate alone,
+# regardless of content — an artifact of batch scoring, not a content verdict.
+# Everything else is the out-of-box default (defaultAction: prompt).
+version: 1
+defaultAction: prompt
+
+globalRateLimit:
+  enabled: false
+
+security:
+  injectionDetection:
+    enabled: true
+    sensitivity: medium
+  egressControl:
+    enabled: true
+    blockPrivateIPs: true
+    blockCloudMetadata: true
+
+responseScanning:
+  detectSecrets: true
+  detectPII: false
+
+rules:
+  - name: block-ssh-keys
+    tool: "*"
+    match:
+      arguments:
+        path: "**/.ssh/**"
+    action: deny
+    message: "SSH key access blocked"
+
+  - name: block-env-files
+    tool: "*"
+    match:
+      arguments:
+        path: "**/.env*"
+    action: deny
+    message: "Environment file access blocked"
+
+  - name: block-credentials
+    tool: "*"
+    match:
+      arguments:
+        path: "**/.aws/**"
+    action: deny
+
+  - name: approve-shell
+    tool: "shell_exec|run_command|execute_command|bash"
+    action: prompt
+
+  - name: allow-reads
+    tool: "read_file|get_file_contents|view_file|list_directory"
+    action: allow
+
+audit:
+  enabled: false
+  path: mcp-firewall.audit.jsonl
