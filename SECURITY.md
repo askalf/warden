@@ -11,7 +11,7 @@ Deterministically, per tool call:
 - **Persistence / backdoors** — `authorized_keys`, cron, systemd units, registry Run keys, backdoor admin accounts — caught in shell commands *and* when written via the file-write tool (shell-rc, `sudoers`, `ld.so.preload`, `profile.d`, Startup).
 - **Security-disabling** — firewall flush, SELinux `setenforce 0`, Defender disable.
 - **Container escape** — host-root mounts, `nsenter --target 1`, privileged containers.
-- **Prompt injection / poisoned skills & MCP tools** — instruction-override / exfil instructions in skill text, tool inputs, or an MCP server's advertised tool descriptions.
+- **Prompt injection / poisoned skills & MCP tools** — instruction-override / exfil instructions in skill text, tool inputs, an MCP server's advertised tool descriptions, or content an MCP server returns (`tools/call` results, `resources/read` bodies, `prompts/get` templates — the indirect-injection vectors).
 
 ## Tiers
 `green` (read-only) → allow · `yellow` (reversible) → allow · `red` (destructive/outward) → approval · `black` (catastrophic/malicious) → block.

@@ -79,6 +79,29 @@ export function inspectServerLine(line, state, opts = {}) {
         return { forwardLine: JSON.stringify(msg) };
       }
     }
+  } else if ((method === 'resources/read' || method === 'prompts/get') && msg.result != null) {
+    // The other two server→client response types that return attacker-controllable
+    // content straight into the agent's context (indirect prompt-injection): a
+    // `resources/read` returns a resource body (file/URL/DB row) the server chose,
+    // and a `prompts/get` returns a prompt template the client injects into the
+    // conversation. scanToolResult stringifies the whole result and runs the same
+    // injectionHits used for tool results, so injection buried anywhere in
+    // contents[]/messages[] is caught. Gated behind the same scanResults opt-out.
+    delete state.pending[msg.id];
+    const kind = method === 'resources/read' ? 'resource' : 'prompt';
+    const hits = scanToolResult(msg.result);
+    if (hits.length) {
+      opts.onWarn?.(`injection in ${kind} response (${method} #${msg.id}): ${hits.join(', ')}`);
+      if (opts.scanResults !== false) {
+        const notice = `⛔ warden neutralized this ${kind} — prompt-injection detected in the returned content (${hits.join('; ')}).`;
+        // Keep each response type's protocol shape valid so a strict client does
+        // not choke, while the malicious payload is replaced by the notice.
+        msg.result = method === 'resources/read'
+          ? { contents: [{ type: 'text', text: notice }], isError: true }
+          : { messages: [{ role: 'user', content: { type: 'text', text: notice } }], isError: true };
+        return { forwardLine: JSON.stringify(msg) };
+      }
+    }
   } else if (method && msg.id != null) {
     delete state.pending[msg.id];
   }

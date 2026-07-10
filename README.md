@@ -75,7 +75,7 @@ Wrap **any** MCP server with the firewall — no code changes to client or serve
 redstamp-mcp --policy redstamp.config.json -- npx -y @modelcontextprotocol/server-filesystem /workspace
 ```
 
-Point your MCP client (Claude Code, Claude Desktop, …) at `redstamp-mcp` instead of the server directly. Every `tools/call` is firewalled before it reaches the server; **poisoned tools are stripped from `tools/list` before the client ever sees them**; blocks come back as normal tool errors the model can read. Flags: `--allow-approve` (downgrade approval-tier to allow), `--no-strip` (warn instead of strip), `--audit <file>` (hash-chained log).
+Point your MCP client (Claude Code, Claude Desktop, …) at `redstamp-mcp` instead of the server directly. Every `tools/call` is firewalled before it reaches the server; **poisoned tools are stripped from `tools/list` before the client ever sees them**; and **prompt-injection in returned content is neutralized across every server→client channel that carries it — `tools/call` results, `resources/read` bodies, and `prompts/get` templates** — before it reaches the model. Blocks come back as normal tool errors the model can read. Flags: `--allow-approve` (downgrade approval-tier to allow), `--no-strip` (warn instead of strip), `--no-scan-results` (forward returned content unscanned), `--audit <file>` (hash-chained log).
 
 ## Works with your agent framework
 
