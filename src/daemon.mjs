@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { check, checkAsync } from './index.mjs';
+import { TaintSession } from './taint.mjs';
 import { ChainedFileAudit } from './audit.mjs';
 import { loadPolicy } from './policy.mjs';
 import { wardenSocket, wardenInfoFile } from './client.mjs';
@@ -30,7 +31,7 @@ function hookStdout(verdict, strict) {
 
 export function startDaemon({
   socketPath = wardenSocket(), configPath = null, auditPath = null, judge = null,
-  tcp = false, tcpPort = 0, infoFile = wardenInfoFile(), onLog = () => {},
+  tcp = false, tcpPort = 0, infoFile = wardenInfoFile(), onLog = () => {}, taint = true,
 } = {}) {
   let policy = configPath ? loadPolicy(configPath) : {};
   // Tamper-evident, streaming audit straight to disk (no in-memory buffer to leak).
@@ -51,6 +52,15 @@ export function startDaemon({
 
   const onConnection = (sock) => {
     let buf = '';
+    // One TaintSession per CONNECTION — the daemon multiplexes many independent
+    // callers over one socket, so a single global session would cross-contaminate
+    // unrelated agents. A persistent library-client connection accrues cross-call
+    // state; a fast-hook client that opens a fresh connection per call gets a
+    // fresh session (no cross-call benefit — expected; the proxy is the stream
+    // integration). Constructed with the policy live at connection open. Gated on
+    // !judge: composing cross-call taint with the async judge tier is a separate
+    // follow-up, so a judge-enabled daemon keeps its existing per-call path.
+    const taintSession = (taint && !judge) ? new TaintSession(policy) : null;
     sock.setTimeout(30000, () => sock.destroy()); // drop idle / half-open connections (handle leak)
     sock.on('data', async (d) => {
       buf += d.toString();
@@ -81,7 +91,9 @@ export function startDaemon({
         try {
           const v = judge
             ? await checkAsync(action, policy, { skillText: req.skillText || '', judge })
-            : check(action, policy, { skillText: req.skillText || '' });
+            : taintSession
+              ? taintSession.check(action, req.skillText || '')
+              : check(action, policy, { skillText: req.skillText || '' });
           served++;
           if (fileAudit) fileAudit.record({
             ts: new Date().toISOString(), tool: action && action.tool, tier: v.tier,
