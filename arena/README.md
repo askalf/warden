@@ -24,6 +24,7 @@ tables are CI-generated, all rows scored on the same neutral host).
 | regex deny-list (naive baseline) | 15.4% | 15.4% | 98.5% | 35/35 | yes |
 | **Pipelock** v3.0.0 (scan API, out-of-box) | 7.0% | 7.0% | 95.5% | 29/35 | yes |
 | **AEGIS** v0.2.0 (pre-execution `/check`, blocking) | 4.9% | **59.4%** | **100%** | 20/35 | yes |
+| **mcp-firewall** v0.1.0 (inbound pipeline, starter) | 9.8% | **100%** | 95.5% | 0/35 | yes |
 | allow-all (null) | 0% | 0% | 100% | 35/35 | yes |
 | block-all (paranoid) | 100% | 100% | 0% | 0/35 | yes |
 
@@ -32,7 +33,7 @@ your real work; **allow-all** gets perfect precision by catching nothing. A
 useful firewall is the one that keeps recall high *and* precision at 100% — which
 is why both columns are always shown together.
 
-Two competitor rows, each read through the axes map below rather than as a
+Three competitor rows, each read through the axes map below rather than as a
 head-to-head loss:
 
 - **Pipelock** catches exactly its declared shape — **exfil** (40%) and
@@ -49,6 +50,14 @@ head-to-head loss:
   also got sent for human review. Read the +gate column for a human-in-the-loop
   tool; reading its block column alone is the exact misread this benchmark is
   built to prevent.
+- **mcp-firewall** is the same idea taken to its limit. Its starter posture
+  escalates *by default* (`defaultAction: prompt`), so it prevents silent
+  execution on **100%** of attacks (+gate) with **zero under-gate** — nothing
+  slips. But the friction column is the whole story: **64 of 67 benign actions**
+  also escalate to a human. That's the honest extreme of "when in doubt, ask" —
+  maximal coverage, maximal friction. AEGIS allows benign and escalates the
+  risky; mcp-firewall escalates nearly everything. Both are legitimate designs,
+  and the +gate/friction pair is the only way to see the difference.
 
 ## What's measured, and why each matters
 
@@ -181,6 +190,7 @@ Results ([EXTERNAL-CORPUS-RESULTS.md](EXTERNAL-CORPUS-RESULTS.md)) — 68 sample
 | regex deny-list (baseline) | 30.6% | 30.6% | 95.8% | 8/8 |
 | Pipelock v3.0.0 (scan API, out-of-box) | 8.3% | 8.3% | 95.8% | 5/8 |
 | AEGIS v0.2.0 (pre-execution `/check`, blocking) | 0.0% | 55.6% | 95.8% | 5/8 |
+| mcp-firewall v0.1.0 (inbound pipeline, starter) | 8.3% | 100% | 95.8% | 0/8 |
 
 warden catches **every** ATT&CK-technique attack (36/36) at **100% precision** —
 **zero benign commands blocked** despite the shared-tool benign set. The single
