@@ -27,6 +27,8 @@ env:
   PIPELOCK_SHA256: 3a9ceb11ab42f5a65bf0c440f01f5ee44e073663dd6a757d720c4a566b85c120
   # AEGIS v0.2.0 (2026-06-29) — pinned by commit, verified after checkout.
   AEGIS_COMMIT: 5f012d58111df8774e27b7f7c0bbb61fb2f9574f
+  # mcp-firewall v0.1.0 (2026-02-19) — pinned by commit, pip-installed from git.
+  MCP_FIREWALL_COMMIT: 5f01d8b66480cdc2b7c7a6850e239e4d0f65df07
 
 jobs:
   arena:
@@ -37,6 +39,16 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '22'
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
+
+      - name: Install mcp-firewall (pinned commit)
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet "mcp-firewall @ git+https://github.com/ressl/mcp-firewall.git@${MCP_FIREWALL_COMMIT}"
+          python -c "import mcp_firewall; print('mcp-firewall importable')"
 
       - name: Download pipelock (pinned) + verify sha256
         run: |
@@ -99,7 +111,7 @@ jobs:
           node -e "
             for (const f of ['arena/results.json', 'arena/external-corpus-results.json']) {
               const rs = require('./' + f).results;
-              for (const id of ['pipelock', 'aegis']) {
+              for (const id of ['pipelock', 'aegis', 'mcp-firewall']) {
                 const p = rs.find((r) => r.id === id);
                 if (!p || !p.available) {
                   console.error(f + ': ' + id + ' missing or unavailable — ' + JSON.stringify(p && p.reason));
@@ -111,7 +123,7 @@ jobs:
                 }
               }
             }
-            console.log('pipelock + aegis scored on both corpora');
+            console.log('pipelock + aegis + mcp-firewall scored on both corpora');
           "
 
       - name: Dump AEGIS log

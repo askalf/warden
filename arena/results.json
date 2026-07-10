@@ -54,8 +54,8 @@
       "underGate": 1,
       "underGateRate": 0.02857142857142857,
       "errored": 0,
-      "latencyMedianMs": 0.066,
-      "latencyP99Ms": 0.772,
+      "latencyMedianMs": 0.078,
+      "latencyP99Ms": 0.719,
       "perFamilyBlockRecall": {
         "container-escape": 1,
         "destructive-fs": 0.8888888888888888,
@@ -100,8 +100,8 @@
       "underGate": 35,
       "underGateRate": 1,
       "errored": 0,
-      "latencyMedianMs": 0.001,
-      "latencyP99Ms": 0.215,
+      "latencyMedianMs": 0.002,
+      "latencyP99Ms": 0.2,
       "perFamilyBlockRecall": {
         "container-escape": 0,
         "destructive-fs": 0.3888888888888889,
@@ -257,7 +257,7 @@
       "underGateRate": 0.8285714285714286,
       "errored": 0,
       "latencyMedianMs": 0,
-      "latencyP99Ms": 7,
+      "latencyP99Ms": 3,
       "perFamilyBlockRecall": {
         "container-escape": 0,
         "destructive-fs": 0,
@@ -305,7 +305,7 @@
       "underGateRate": 0.5714285714285714,
       "errored": 0,
       "latencyMedianMs": 1,
-      "latencyP99Ms": 5,
+      "latencyP99Ms": 4,
       "perFamilyBlockRecall": {
         "container-escape": 0.5,
         "destructive-fs": 0.3888888888888889,
@@ -324,6 +324,54 @@
         "ssrf-metadata": 1,
         "type-confusion": 0.6,
         "windows-ttp": 0.125
+      }
+    },
+    {
+      "id": "mcp-firewall",
+      "name": "mcp-firewall (inbound pipeline)",
+      "cmd": [
+        "python",
+        "arena/adapters/mcp_firewall_adapter.py"
+      ],
+      "deterministic": true,
+      "offline": true,
+      "license": "AGPL-3.0",
+      "homepage": "https://github.com/ressl/mcp-firewall",
+      "axis": "tool-call-firewall",
+      "notes": "SAME-AXIS: an MCP security gateway whose per-call surface is a tool-call firewall. Scored through its own inbound pipeline (kill-switch → rate-limit → injection → egress → policy → chain) in the documented `mcp-firewall init` starter posture, with the global rate-limit disabled (200-call window would deny the last ~45 of 245 on rate alone, not content). THREE-tier: deny→blocked, PROMPT→gated, allow→allowed. We read the RAW stage verdict because its SDK auto-approves prompts to allow on a non-interactive run, which would erase its human-approval tier. ESCALATE-BY-DEFAULT: the starter `defaultAction` is `prompt`, so anything not matched by injection/egress/a rule escalates to a human — expect HIGH +gate recall AND high friction (benign also escalates); read the two together. Injection detector screens prompt-injection TEXT, not shell semantics. Alpha (v0.1.0, no tagged release); pinned by commit 5f01d8b. AGPL-3.0: run as a black box via its SDK, not linked into warden. Needs `pip install git+https://github.com/ressl/mcp-firewall@5f01d8b` (the Arena workflow does this).",
+      "available": true,
+      "observedDeterministic": true,
+      "malicious": 143,
+      "benign": 67,
+      "risky": 35,
+      "recallBlock": 0.0979020979020979,
+      "recallPrevent": 1,
+      "precision": 0.9552238805970149,
+      "falsePositives": 3,
+      "benignFriction": 64,
+      "underGate": 0,
+      "underGateRate": 0,
+      "errored": 0,
+      "latencyMedianMs": 0.055,
+      "latencyP99Ms": 0.159,
+      "perFamilyBlockRecall": {
+        "container-escape": 1,
+        "destructive-fs": 1,
+        "exfil": 1,
+        "git-rce": 1,
+        "injection-skill": 1,
+        "obfuscation": 1,
+        "persistence-unix": 1,
+        "persistence-win": 1,
+        "rce-download": 1,
+        "rce-pipe": 1,
+        "reverse-shell": 1,
+        "rm-root": 1,
+        "secret-theft": 1,
+        "security-disable": 1,
+        "ssrf-metadata": 1,
+        "type-confusion": 1,
+        "windows-ttp": 1
       }
     }
   ]
