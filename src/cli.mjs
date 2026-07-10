@@ -33,6 +33,21 @@ export function queryAudit(lines, { tier = null, blocksOnly = false, tail = 0 } 
   return { total: lines.length, shown: rows.length, byDecision: tally('decision'), byTier: tally('tier'), rows };
 }
 
+/**
+ * Format a verifyAuditFile() result for the `warden verify` CLI: a human line
+ * plus the process exit code (0 intact / 2 tamper) so it's usable in CI and
+ * monitoring. Pure — the command wrapper only prints and exits. `unchained`
+ * (foreign/legacy lines interspersed in the log) is surfaced, not a failure —
+ * it matches verifyAuditFile's semantics.
+ */
+export function formatVerify(r) {
+  if (r && r.ok) {
+    const extra = r.unchained ? ` (${r.unchained} unchained/foreign line${r.unchained === 1 ? '' : 's'} skipped)` : '';
+    return { ok: true, exitCode: 0, message: `✓ audit intact — ${r.entries} chained ${r.entries === 1 ? 'entry' : 'entries'}${extra}` };
+  }
+  return { ok: false, exitCode: 2, message: `✗ TAMPER DETECTED at entry ${r ? r.at : '?'}` };
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
@@ -70,12 +85,23 @@ async function main() {
     if (flag('--blocks') || val('--tier', null) || parseInt(val('--tail', '0'), 10)) {
       for (const r of q.rows.slice(-60)) console.log(`  ${(r.ts || '').slice(11, 19)}  ${(r.decision || '').padEnd(7)} ${(r.tier || '').padEnd(6)} ${(r.tool || '').padEnd(12)} ${(r.why || []).join('; ').slice(0, 90)}`);
     }
+  } else if (cmd === 'verify') {
+    // Surface the tamper-evident audit chain through the CLI — the one question
+    // the hash-chain exists to answer ("has my audit log been edited?"), with an
+    // exit code CI / monitoring can alert on. All logic stays in the tested
+    // verifyAuditFile; this only formats + sets the exit code.
+    const { verifyAuditFile } = await import('./audit.mjs');
+    const auditPath = val('--audit', process.env.WARDEN_AUDIT || path.join(HOME, '.warden', 'audit.jsonl'));
+    const r = formatVerify(verifyAuditFile(auditPath));
+    (r.ok ? console.log : console.error)(r.message);
+    process.exit(r.exitCode);
   } else {
     console.log(`warden — own your agent security
   warden check '<action-json>' [--policy f]            firewall one action
   warden scan-mcp <tools.json>                          scan an MCP tool manifest for poisoning
   warden init [--global]                                scan project -> starter warden.config.json
-  warden audit [--blocks] [--tier black] [--tail N]     summarize / query the audit log`);
+  warden audit [--blocks] [--tier black] [--tail N]     summarize / query the audit log
+  warden verify [--audit f]                             verify the tamper-evident audit chain (exit 2 on tamper)`);
   }
 }
 

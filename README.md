@@ -125,6 +125,7 @@ redstamp check '{"tool":"shell","input":{"command":"rm -rf /"}}'   # firewall on
 redstamp scan-mcp ./mcp-tools.json                                  # scan an MCP manifest for poisoning
 redstamp init                                                       # scan project -> starter redstamp.config.json
 redstamp audit --blocks                                             # what redstamp has stopped (also --tier black, --tail N)
+redstamp verify                                                     # verify the tamper-evident audit chain (exit 2 on tamper — CI/monitoring-usable)
 redstamp-serve                                                      # run the daemon (shared classifier + audit, policy hot-reload)
 ```
 
