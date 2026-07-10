@@ -3,8 +3,9 @@
 // `tools/list` responses, and neutralizes prompt-injection in tool RESULTS.
 // JSON-RPC over newline-delimited stdio.
 import { spawn } from 'node:child_process';
-import { check } from './index.mjs';
+import { check, recordVerdict } from './index.mjs';
 import { mapMcpToAction, scanMcpTools, scanToolResult } from './mcp.mjs';
+import { TaintSession } from './taint.mjs';
 
 const MAX_LINE = 1 << 20; // 1 MiB — a single JSON-RPC frame shouldn't exceed this
 
@@ -39,7 +40,15 @@ export function inspectClientLine(line, state, policy, opts = {}) {
     const name = msg.params?.name;
     const args = msg.params?.arguments || {};
     const action = mapMcpToAction(name, args, opts.nameMap || {});
-    const v = check(action, policy, { audit: opts.audit });
+    // Cross-call taint: when a per-connection TaintSession is present (one stdio
+    // proxy process ≈ one agent session), classify in the context of prior calls
+    // on THIS connection, so a split-exfil — secret read into a temp file on
+    // call 1, then that file shipped out on call 2 — is caught. The session can
+    // only RAISE risk, never lower, so this is at least as safe as the stateless
+    // check. `--no-taint` leaves state.taint null and falls back to check().
+    let v;
+    if (state.taint) { v = state.taint.check(action); recordVerdict(opts.audit, action, v); }
+    else v = check(action, policy, { audit: opts.audit });
     const blocked = v.decision === 'block' || (v.decision === 'approve' && !opts.allowApprove);
     if (blocked) {
       opts.onWarn?.(`blocked ${name} (${v.tier}): ${v.why.join('; ')}`);
@@ -109,9 +118,12 @@ export function inspectServerLine(line, state, opts = {}) {
 }
 
 /** Spawn the downstream server and wire the two firewalled streams together. */
-export function runProxy({ command, args = [], policy = {}, audit = null, auditPath = null, allowApprove = false, strip = true, scanResults = true, nameMap = {}, maxLine = MAX_LINE }) {
+export function runProxy({ command, args = [], policy = {}, audit = null, auditPath = null, allowApprove = false, strip = true, scanResults = true, taint = true, nameMap = {}, maxLine = MAX_LINE }) {
   const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'inherit'] });
-  const state = { pending: {} };
+  // One proxy process fronts one downstream server for one agent session, so a
+  // single per-process TaintSession is the natural cross-call scope. --no-taint
+  // (taint:false) disables it and restores the stateless per-call check.
+  const state = { pending: {}, taint: taint ? new TaintSession(policy) : null };
   const opts = { allowApprove, strip, scanResults, nameMap, audit, onWarn: (m) => process.stderr.write('[warden] ' + m + '\n') };
 
   const fromClient = makeFramer(maxLine);

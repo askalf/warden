@@ -79,10 +79,13 @@ export class TaintSession {
 
   // Classify one call in the CONTEXT of the session so far. Returns decide()'s
   // verdict, possibly RAISED for a cross-call flow. Never throws, never lowers.
-  check(action) {
+  // `skillText` is forwarded to decide() unchanged so callers that vet skill
+  // text (the daemon's action-shape requests) keep that classification when they
+  // route through a session.
+  check(action, skillText = '') {
     this.calls++;
     let v;
-    try { v = decide(action, this.policy); } catch { return { tool: action && action.tool, tier: TIER.RED, decision: 'approve', why: ['⚠ taint: guard error — fail-safe gate'], crossCall: true }; }
+    try { v = decide(action, this.policy, skillText); } catch { return { tool: action && action.tool, tier: TIER.RED, decision: 'approve', why: ['⚠ taint: guard error — fail-safe gate'], crossCall: true }; }
     let out = v;
     try {
       const cmd = cmdText(action);

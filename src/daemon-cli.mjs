@@ -33,5 +33,9 @@ try {
   }
 } catch {}
 
-startDaemon({ configPath, auditPath, tcp: true, judge, onLog: (m) => process.stderr.write('[warden] ' + m + '\n') });
+// Cross-call taint is on by default (catches split-exfil across calls on one
+// connection); --no-taint or WARDEN_NO_TAINT=1 restores the per-call path.
+const taint = !(process.argv.includes('--no-taint') || process.env.WARDEN_NO_TAINT === '1');
+
+startDaemon({ configPath, auditPath, tcp: true, judge, taint, onLog: (m) => process.stderr.write('[warden] ' + m + '\n') });
 process.stderr.write('[warden] serve on ' + wardenSocket() + ' (+ loopback fast-hook)' + (judge ? ' + judge tier → ' + process.env.WARDEN_JUDGE_ENDPOINT : '') + ' — Ctrl-C to stop\n');
