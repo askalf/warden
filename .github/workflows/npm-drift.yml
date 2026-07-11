@@ -25,12 +25,14 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   drift:
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write # open/close the drift alert issue
     steps:
       - name: Compare npm vs latest GitHub release
         id: check
