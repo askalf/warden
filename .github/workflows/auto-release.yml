@@ -46,6 +46,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false # tag push below supplies the token explicitly
 
       - name: Read version from package.json
         id: version
@@ -139,12 +140,13 @@ jobs:
         if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name 'askalf'
           git config user.email 'support@askalf.org'
           git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$TAG"
 
       - name: Create GitHub release
         if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
