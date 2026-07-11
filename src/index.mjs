@@ -1,10 +1,10 @@
 // warden — own your agent security. A guard between an agent and its tools.
 import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
 import { scanSecrets, injectionHits, obfuscationHits, isExternal, ipScope, safeStringify, asStr, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
-import { matchRule, DEFAULT_POLICY, loadPolicy, normalizePolicy } from './policy.mjs';
+import { matchRule, DEFAULT_POLICY, loadPolicy, normalizePolicy, resolveConfig } from './policy.mjs';
 import { AuditLog } from './audit.mjs';
 
-export { TIER, AuditLog, classify, loadPolicy, matchRule };
+export { TIER, AuditLog, classify, loadPolicy, matchRule, resolveConfig };
 
 // Destination-keyed string values of a write action's input (path/dest/target/…).
 // A poisoned write can name its target `dest`/`output`/`to` instead of `path`;

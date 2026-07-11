@@ -52,7 +52,7 @@ export function inspectClientLine(line, state, policy, opts = {}) {
     const blocked = v.decision === 'block' || (v.decision === 'approve' && !opts.allowApprove);
     if (blocked) {
       opts.onWarn?.(`blocked ${name} (${v.tier}): ${v.why.join('; ')}`);
-      const hint = v.decision === 'approve' ? ' — add an allow rule to warden.config.json to permit it.' : '';
+      const hint = v.decision === 'approve' ? ' — add an allow rule to redstamp.config.json to permit it.' : '';
       return { replyLine: toolError(msg.id, `⛔ warden blocked this call (${v.tier}): ${v.why.join('; ')}${hint}`) };
     }
     if (v.decision === 'approve') opts.onWarn?.(`allowed (approve-tier, --allow-approve) ${name}`);
