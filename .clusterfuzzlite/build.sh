@@ -8,7 +8,7 @@
 # redstamp's runtime is zero-dependency, so Jazzer is installed --no-save here
 # (fuzz-only, never added to package.json or the published tarball).
 cd "$SRC/redstamp"
-npm install --no-save --no-audit --no-fund @jazzer.js/core@^4
+npm install --no-save --no-audit --no-fund @jazzer.js/core@4.0.0
 
 for target in classify scan_mcp inject; do
   compile_javascript_fuzzer redstamp "fuzz/${target}.fuzz.js" --sync
