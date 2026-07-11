@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// warden CLI: check an action, scan an MCP manifest, init a policy, query the audit log.
+// redstamp CLI: check an action, scan an MCP manifest, init a policy, query the audit log.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { resolveConfig } from './policy.mjs';
 
 const HOME = process.env.USERPROFILE || process.env.HOME || os.homedir();
 
@@ -57,21 +58,21 @@ async function main() {
   if (cmd === 'check') {
     const { check, loadPolicy } = await import('./index.mjs');
     const json = argv.find((a) => a.trim().startsWith('{'));
-    if (!json) { console.error('usage: warden check \'{"tool":"shell","input":{"command":"..."}}\''); process.exit(2); }
-    const v = check(JSON.parse(json), loadPolicy(val('--policy', 'warden.config.json')));
+    if (!json) { console.error('usage: redstamp check \'{"tool":"shell","input":{"command":"..."}}\''); process.exit(2); }
+    const v = check(JSON.parse(json), loadPolicy(val('--policy', null) || resolveConfig()));
     console.log(JSON.stringify(v, null, 2));
     process.exit(v.decision === 'block' ? 1 : 0);
   } else if (cmd === 'scan-mcp') {
     const { scanMcpTools } = await import('./mcp.mjs');
     const file = argv.slice(1).find((a) => !a.startsWith('--'));
-    if (!file) { console.error('usage: warden scan-mcp <tools.json>'); process.exit(2); }
+    if (!file) { console.error('usage: redstamp scan-mcp <tools.json>'); process.exit(2); }
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     const f = scanMcpTools(Array.isArray(data) ? data : data.tools || []);
     if (f.length) { console.log(JSON.stringify(f, null, 2)); process.exit(1); }
     console.log('✓ no poisoned tool descriptions found');
   } else if (cmd === 'init') {
     const policy = buildInitPolicy();
-    const target = flag('--global') ? path.join(HOME, '.warden', 'config.json') : path.join(process.cwd(), 'warden.config.json');
+    const target = flag('--global') ? path.join(HOME, '.warden', 'config.json') : resolveConfig();
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, JSON.stringify(policy, null, 2) + '\n');
     console.log('wrote ' + target + '\n');
@@ -96,12 +97,15 @@ async function main() {
     (r.ok ? console.log : console.error)(r.message);
     process.exit(r.exitCode);
   } else {
-    console.log(`warden — own your agent security
-  warden check '<action-json>' [--policy f]            firewall one action
-  warden scan-mcp <tools.json>                          scan an MCP tool manifest for poisoning
-  warden init [--global]                                scan project -> starter warden.config.json
-  warden audit [--blocks] [--tier black] [--tail N]     summarize / query the audit log
-  warden verify [--audit f]                             verify the tamper-evident audit chain (exit 2 on tamper)`);
+    console.log(`redstamp — own your agent security
+  redstamp check '<action-json>' [--policy f]           firewall one action
+  redstamp scan-mcp <tools.json>                         scan an MCP tool manifest for poisoning
+  redstamp init [--global]                               scan project -> starter redstamp.config.json
+  redstamp audit [--blocks] [--tier black] [--tail N]    summarize / query the audit log
+  redstamp verify [--audit f]                            verify the tamper-evident audit chain (exit 2 on tamper)
+
+  (\`warden*\` CLI aliases still work; an existing warden.config.json is read
+  automatically, and the WARDEN_* env vars are unchanged.)`);
   }
 }
 

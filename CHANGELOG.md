@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0] - 2026-07-11
+
+### Changed
+- **`redstamp init` now writes `redstamp.config.json`** (was `warden.config.json`),
+  and `redstamp check` / `redstamp-mcp` default to it — completing the config-file
+  half of the warden→redstamp rename (the docs already advertised
+  `redstamp.config.json`, but the code still defaulted to `warden.config.json`, so
+  a user following the README got a gate that loaded no policy). **Fully
+  back-compatible:** with no `--policy`, an existing `warden.config.json` is still
+  read transparently, so a project set up before the rename keeps working — only a
+  fresh `init` writes the branded name. Help text updated and the example is now
+  `redstamp.config.example.json`. The `~/.warden/` **global** config, the audit
+  log, and the `WARDEN_*` env vars are intentionally unchanged.
+
 ## 0.4.1
 
 - **Renamed: `@askalf/warden` → `@askalf/redstamp`** (npm-publishable name; the old name collides with an existing unscoped package and is create-blocked by the registry). GitHub repo becomes `askalf/redstamp` (old URLs redirect). Legacy `warden`/`warden-mcp`/`warden-hook`/`warden-serve` bin aliases retained alongside the new `redstamp*` bins. `WARDEN_*` env vars unchanged.
