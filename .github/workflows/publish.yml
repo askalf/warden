@@ -68,16 +68,22 @@ jobs:
             -H "Authorization: Bearer ${idtok}" \
             "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/${name/\//%2f}")
           rm -f id-token.json
-          if [ "$code" = "200" ]; then
-            echo "Trusted-publisher binding OK (exchange HTTP 200)."
-            rm -f exchange-response.json
-          else
-            echo "::error::OIDC token exchange for ${name} failed: HTTP ${code}"
-            cat exchange-response.json; echo ""
-            echo "Check npmjs.com -> ${name} -> Settings -> Trusted Publisher:"
-            echo "  repository ${GITHUB_REPOSITORY}, workflow filename publish.yml (bare filename, no path), environment EMPTY."
-            exit 1
-          fi
+          # The exchange returns 201 Created on success (a fresh short-lived
+          # token IS created) — accept any 2xx, not just 200. The success-path
+          # response is deleted unread; it contains that token.
+          case "$code" in
+            2*)
+              echo "Trusted-publisher binding OK (exchange HTTP ${code})."
+              rm -f exchange-response.json
+              ;;
+            *)
+              echo "::error::OIDC token exchange for ${name} failed: HTTP ${code}"
+              cat exchange-response.json; echo ""
+              echo "Check npmjs.com -> ${name} -> Settings -> Trusted Publisher:"
+              echo "  repository ${GITHUB_REPOSITORY}, workflow filename publish.yml (bare filename, no path), environment EMPTY."
+              exit 1
+              ;;
+          esac
 
       - run: npm ci
         if: steps.gate.outputs.skip != 'true'
