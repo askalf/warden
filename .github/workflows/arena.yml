@@ -27,8 +27,9 @@ env:
   PIPELOCK_SHA256: 3a9ceb11ab42f5a65bf0c440f01f5ee44e073663dd6a757d720c4a566b85c120
   # AEGIS v0.2.0 (2026-06-29) — pinned by commit, verified after checkout.
   AEGIS_COMMIT: 5f012d58111df8774e27b7f7c0bbb61fb2f9574f
-  # mcp-firewall v0.1.0 (2026-02-19) — pinned by commit, pip-installed from git.
-  MCP_FIREWALL_COMMIT: 5f01d8b66480cdc2b7c7a6850e239e4d0f65df07
+  # mcp-firewall v0.1.0 (2026-02-19) is pinned by commit too, but the SHA is
+  # inlined in its install step below: Scorecard's pin check reads raw text
+  # and can't resolve an env var, so a variable here would read as unpinned.
 
 jobs:
   arena:
@@ -44,10 +45,18 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install mcp-firewall (pinned commit)
+      - name: Install mcp-firewall deps (hash-pinned)
+        # Its runtime deps, resolved once from the pinned commit's pyproject and
+        # frozen with hashes (arena/requirements-mcp-firewall.in has the recipe).
+        run: python -m pip install --quiet --require-hashes -r arena/requirements-mcp-firewall.txt
+
+      - name: Install mcp-firewall (pinned commit, --no-deps)
+        # mcp-firewall v0.1.0 (2026-02-19). Editable + --no-deps + literal SHA is
+        # the commit-pinned pip form Scorecard credits; deps come from the
+        # hash-pinned step above.
         run: |
           set -euo pipefail
-          python -m pip install --quiet "mcp-firewall @ git+https://github.com/ressl/mcp-firewall.git@${MCP_FIREWALL_COMMIT}"
+          python -m pip install --quiet --no-deps -e "git+https://github.com/ressl/mcp-firewall.git@5f01d8b66480cdc2b7c7a6850e239e4d0f65df07#egg=mcp-firewall"
           python -c "import mcp_firewall; print('mcp-firewall importable')"
 
       - name: Download pipelock (pinned) + verify sha256

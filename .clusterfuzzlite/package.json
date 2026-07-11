@@ -1,0 +1,8 @@
+{
+  "name": "redstamp-fuzz",
+  "private": true,
+  "description": "Fuzz-only dependency manifest for ClusterFuzzLite. Jazzer.js is hash-pinned via the committed lockfile (`npm ci` verifies integrity — Scorecard Pinned-Dependencies) and is never added to the project's own package.json or the published tarball.",
+  "dependencies": {
+    "@jazzer.js/core": "4.0.0"
+  }
+}
