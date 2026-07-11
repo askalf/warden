@@ -1,0 +1,16 @@
+# Runtime dependencies of mcp-firewall, copied verbatim from its pyproject.toml
+# at the arena-pinned commit 5f01d8b66480cdc2b7c7a6850e239e4d0f65df07.
+# mcp-firewall itself is installed separately (--no-deps, editable, commit-pinned).
+# Recompile: pip-compile --generate-hashes --strip-extras requirements-mcp-firewall.in
+mcp>=1.0
+click>=8.1
+rich>=13.0
+pydantic>=2.0
+pydantic-settings>=2.0
+fastapi>=0.110
+uvicorn>=0.27
+jinja2>=3.1
+cryptography>=42.0
+pyyaml>=6.0
+httpx>=0.27
+websockets>=12.0
