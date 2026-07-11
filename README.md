@@ -4,6 +4,10 @@
 
 > _**Formerly `warden`.** Renamed to `redstamp` for the npm release; the GitHub repo redirects and the legacy `warden*` CLI aliases keep working. Env vars keep the `WARDEN_` prefix for compatibility._
 
+[![ci](https://github.com/askalf/redstamp/actions/workflows/ci.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/askalf/redstamp/badge)](https://scorecard.dev/viewer/?uri=github.com/askalf/redstamp)
+&nbsp;·&nbsp; MIT &nbsp;·&nbsp; zero dependencies &nbsp;·&nbsp; [threat model →](SECURITY.md)
+
 Autonomous agents are a machine for turning your bank balance — and your blast radius — into tool calls. OpenClaw hit ~180k stars and then became 2026's first big AI security disaster: one-click RCE, a poisoned skills marketplace, tens of thousands of instances exposed with no auth. **redstamp is the layer that stops that.**
 
 **redstamp isn't an AI — it's a deterministic firewall that *guards* AI agents.** Same tool call → same verdict, every time, offline, with no model in the decision path. That's deliberate: a probabilistic (LLM-based) guard can be jailbroken and never answers the same way twice; a deterministic one is reproducible and auditable. (There's an optional LLM judge for gray-zone calls — the only probabilistic part — but it can only *raise* risk, never clear a block.)
