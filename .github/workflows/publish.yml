@@ -14,6 +14,16 @@ name: Publish to npm
 #
 # Idempotent: if npm already has package.json's version, the run exits green
 # without publishing — safe to re-dispatch any time.
+#
+# GATED (content-scan): the actual npm publish is OFF until the repo variable
+# NPM_PUBLISH_ENABLED is set to 'true'. redstamp's tarball is currently rejected
+# by npm's registry content-scan (E403 "forbidden by your security policy") — its
+# classify.mjs signature dictionary trips the malware scanner — so without this
+# gate an auto-release bump fails this workflow on EVERY release. While gated the
+# run exits GREEN with a notice; the git tag + GitHub release still ship, and
+# npm-drift.yml keeps flagging the git-ahead-of-npm gap. Once npm allowlists it:
+#   gh variable set NPM_PUBLISH_ENABLED --body true --repo askalf/redstamp
+# then re-dispatch this workflow (or cut the next release) to publish.
 
 on:
   workflow_dispatch:
@@ -37,10 +47,21 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Skip if npm already has this version
+      - name: Gate — skip if publishing is disabled, or npm already has this version
         id: gate
+        env:
+          NPM_PUBLISH_ENABLED: ${{ vars.NPM_PUBLISH_ENABLED }}
         run: |
           set -euo pipefail
+          # Content-scan gate: publishing stays OFF until npm allowlists redstamp
+          # (registry malware scan → E403), so an auto-release bump doesn't fail
+          # this workflow every release. Flip it on once cleared:
+          #   gh variable set NPM_PUBLISH_ENABLED --body true --repo askalf/redstamp
+          if [ "${NPM_PUBLISH_ENABLED:-}" != "true" ]; then
+            echo "::notice::npm publish is GATED (repo variable NPM_PUBLISH_ENABLED != 'true'). redstamp is awaiting an npm content-scan allowlist; the git tag + GitHub release still ship. Set NPM_PUBLISH_ENABLED=true once npm clears the block to publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
           published=$(npm view "${name}@${version}" version 2>/dev/null || echo "")
