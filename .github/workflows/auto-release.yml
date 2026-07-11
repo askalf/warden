@@ -2,16 +2,23 @@ name: Auto-release
 
 # Triggered when package.json's "version" field changes on master.
 # Tags vX.Y.Z, creates a GitHub release from the matching CHANGELOG
-# section, and runs `npm publish --provenance --access public`.
+# section, then dispatches publish.yml to push the version to npm.
+#
+# npm auth lives ONLY in publish.yml: the npmjs.com trusted publisher (OIDC)
+# is bound to that exact filename, so this workflow cannot publish directly —
+# and doesn't need a token to try. The GITHUB_TOKEN-created workflow_dispatch
+# below DOES start a run (one of the two documented exceptions to the
+# no-recursive-workflows rule).
 #
 # Idempotent — if the tag already exists the job exits cleanly without
-# republishing. Manual re-runs via workflow_dispatch are safe.
+# republishing, and publish.yml itself skips versions npm already has.
+# Manual re-runs via workflow_dispatch are safe.
 #
 # A manual workflow_dispatch BYPASSES the version-diff gate (which only makes
 # sense for push events) and releases whatever version is in package.json,
 # guarded solely by the "tag already exists" check. This makes dispatch the
-# COMPLETE recovery lever after a rotated NPM_TOKEN is fixed: one run tags +
-# creates the GitHub release + publishes to npm (publish.yml only does npm).
+# COMPLETE recovery lever: one run tags + creates the GitHub release +
+# dispatches the npm publish.
 
 on:
   push:
@@ -22,7 +29,7 @@ on:
 
 permissions:
   contents: write
-  id-token: write
+  actions: write
 
 jobs:
   release:
@@ -142,8 +149,8 @@ jobs:
             --title "$TAG" \
             --notes-file release-notes.md
 
-      - name: npm publish
+      - name: Dispatch npm publish (OIDC via publish.yml)
         if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run publish.yml -R "${{ github.repository }}" --ref master

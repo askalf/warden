@@ -1,0 +1,109 @@
+name: npm drift
+
+# Daily check that npm's published @askalf/redstamp matches the latest GitHub
+# release tag. Opens a GitHub issue when they diverge — the stranded-release
+# state auto-release.yml's one-axis gate (HEAD vs HEAD^1 version diff) cannot
+# detect, which would otherwise stay invisible until a user reported the
+# missing version.
+#
+# Replaces npm-token-health.yml: publishing is OIDC trusted publishing via
+# publish.yml (no NPM_TOKEN anywhere), so there is no token left to health-
+# check. What can still rot is the trusted-publisher binding on npmjs.com —
+# a publish failure from that shows up here as drift the next morning.
+#
+# No checkout / setup-node: `npm view` and `gh release view` are pure remote
+# reads; the runner's preinstalled npm + gh are enough.
+#
+# Triggers:
+#  - daily at 04:17 UTC (off-peak, offset minute to avoid stacking)
+#  - workflow_dispatch for manual verification right after a release
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Compare npm vs latest GitHub release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_tag=$(gh release view -R "${{ github.repository }}" --json tagName --jq .tagName)
+          release_v="${release_tag#v}"
+          npm_v=$(npm view @askalf/redstamp version)
+          echo "latest GitHub release: ${release_v} | npm latest: ${npm_v}"
+          echo "release_v=${release_v}" >> "$GITHUB_OUTPUT"
+          echo "npm_v=${npm_v}" >> "$GITHUB_OUTPUT"
+          if [ "$release_v" = "$npm_v" ]; then
+            echo "in_sync=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::npm (${npm_v}) does not match the latest GitHub release (${release_v})"
+            echo "in_sync=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open issue on drift
+        if: steps.check.outputs.in_sync != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_V: ${{ steps.check.outputs.release_v }}
+          NPM_V: ${{ steps.check.outputs.npm_v }}
+        run: |
+          marker='<!-- redstamp-npm-drift -->'
+          existing=$(gh issue list -R "${{ github.repository }}" --state open --search "in:body $marker" --json number --jq '.[0].number // ""')
+          if [ -n "$existing" ]; then
+            echo "Existing open drift issue #$existing — leaving alone."
+            exit 0
+          fi
+
+          body_file=$(mktemp)
+          {
+            echo "$marker"
+            echo ""
+            echo "### npm is out of sync with the latest GitHub release"
+            echo ""
+            echo "| surface | version |"
+            echo "|---|---|"
+            echo "| GitHub release | \`${RELEASE_V}\` |"
+            echo "| npm latest | \`${NPM_V}\` |"
+            echo ""
+            echo "### To fix"
+            echo ""
+            echo "1. Dispatch the publisher: \`gh workflow run publish.yml -R ${{ github.repository }} --ref master\` — idempotent (skips if npm already has package.json's version)."
+            echo "2. If that run fails at \`npm publish\` with an auth error, the OIDC trusted publisher on npmjs.com is missing or mis-bound: package settings for \`@askalf/redstamp\` -> Trusted Publisher -> GitHub Actions -> repo \`askalf/redstamp\`, workflow \`publish.yml\`."
+            echo "3. This issue auto-closes when the next drift check passes."
+            echo ""
+            echo "### Workflow run"
+            echo ""
+            echo "[Run #${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } > "$body_file"
+
+          gh label create npm-drift -R "${{ github.repository }}" \
+            --description "npm registry out of sync with the latest GitHub release" \
+            --color D93F0B --force
+
+          gh issue create \
+            -R "${{ github.repository }}" \
+            --title "npm drift: registry (${NPM_V}) != latest release (${RELEASE_V})" \
+            --body-file "$body_file" \
+            --label "npm-drift"
+
+      - name: Auto-close any open drift issue on sync
+        if: steps.check.outputs.in_sync == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          marker='<!-- redstamp-npm-drift -->'
+          open_issues=$(gh issue list -R "${{ github.repository }}" --state open --search "in:body $marker" --json number --jq '.[].number')
+          for n in $open_issues; do
+            gh issue close "$n" -R "${{ github.repository }}" --comment "Auto-closed: npm matches the latest GitHub release again on [run #${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          done

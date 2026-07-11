@@ -2,17 +2,18 @@ name: Publish to npm
 
 # npm-ONLY publisher, and the ONLY workflow that can publish via OIDC trusted
 # publishing: the npmjs.com trusted publisher is bound to this exact filename
-# (publish.yml), so auto-release.yml's npm step cannot authenticate this way.
-# auto-release.yml remains the path for tag + GitHub release (fires on a
-# package.json version bump or manual dispatch).
+# (publish.yml), so no other workflow can authenticate this way.
 #
-# Running this WITHOUT a matching tag/release leaves git/npm out of sync —
-# which is what stranded the original 0.2.0 release. Bump + release first
-# (auto-release.yml), then dispatch this to push that version to npm.
+# Two ways this runs:
+#  - auto-release.yml dispatches it right after tagging + creating the GitHub
+#    release (a GITHUB_TOKEN-created workflow_dispatch DOES start a run — it's
+#    one of the two documented exceptions to the no-recursive-workflows rule).
+#  - Manual dispatch as the recovery lever for a stranded release (git/GitHub
+#    ahead of npm). Bump + release first (auto-release.yml), then dispatch
+#    this to push that version to npm.
 #
-# Dispatch-only on purpose. A `release: published` trigger here would
-# double-fire against auto-release.yml's own npm step ("cannot publish over
-# existing version").
+# Idempotent: if npm already has package.json's version, the run exits green
+# without publishing — safe to re-dispatch any time.
 
 on:
   workflow_dispatch:
@@ -33,8 +34,26 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+
+      - name: Skip if npm already has this version
+        id: gate
+        run: |
+          set -euo pipefail
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          published=$(npm view "${name}@${version}" version 2>/dev/null || echo "")
+          if [ "$published" = "$version" ]; then
+            echo "npm already has ${name}@${version}; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - run: npm ci
+        if: steps.gate.outputs.skip != 'true'
       - run: npm test
+        if: steps.gate.outputs.skip != 'true'
       # Auth = OIDC via the npmjs.com trusted publisher bound to THIS workflow
       # filename (publish.yml) — no NPM_TOKEN. Provenance is automatic under OIDC.
       - run: npm publish --access public
+        if: steps.gate.outputs.skip != 'true'
