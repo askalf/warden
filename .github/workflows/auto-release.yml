@@ -14,6 +14,10 @@ name: Auto-release
 # republishing, and publish.yml itself skips versions npm already has.
 # Manual re-runs via workflow_dispatch are safe.
 #
+# Every release ships the npm tarball plus its Sigstore provenance bundle
+# (<tarball>.sigstore.json, signed keyless via GitHub OIDC — Scorecard
+# Signed-Releases). Verify: `gh attestation verify <tarball> --owner askalf`.
+#
 # A manual workflow_dispatch BYPASSES the version-diff gate (which only makes
 # sense for push events) and releases whatever version is in package.json,
 # guarded solely by the "tag already exists" check. This makes dispatch the
@@ -36,6 +40,8 @@ jobs:
     permissions:
       contents: write # push tag + create GitHub release
       actions: write # dispatch publish.yml (the OIDC npm publisher)
+      id-token: write # keyless Sigstore signing (attest-build-provenance)
+      attestations: write # persist the attestation in GitHub's store
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -150,6 +156,34 @@ jobs:
           gh release create "$TAG" \
             --title "$TAG" \
             --notes-file release-notes.md
+
+      - name: Build npm tarball (release artifact)
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        id: pack
+        run: |
+          set -euo pipefail
+          tarball=$(npm pack --silent)
+          echo "tarball=${tarball}" >> "$GITHUB_OUTPUT"
+          sha256sum "$tarball"
+
+      - name: Attest build provenance (keyless Sigstore)
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        id: attest
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: ${{ steps.pack.outputs.tarball }}
+
+      - name: Upload tarball + provenance bundle to the release
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          cp "$BUNDLE" "${TARBALL}.sigstore.json"
+          gh release upload "$TAG" --clobber "$TARBALL" "${TARBALL}.sigstore.json"
 
       - name: Dispatch npm publish (OIDC via publish.yml)
         if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
