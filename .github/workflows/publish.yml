@@ -68,8 +68,10 @@ jobs:
             -H "Authorization: Bearer ${idtok}" \
             "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/${name/\//%2f}")
           rm -f id-token.json
-          if [ "$code" = "200" ]; then
-            echo "Trusted-publisher binding OK (exchange HTTP 200)."
+          # 201 Created is the registry's actual success code; accept any 2xx.
+          # The success body holds a short-lived token — delete it unread.
+          if [ "${code#2}" != "$code" ]; then
+            echo "Trusted-publisher binding OK (exchange HTTP ${code})."
             rm -f exchange-response.json
           else
             echo "::error::OIDC token exchange for ${name} failed: HTTP ${code}"
