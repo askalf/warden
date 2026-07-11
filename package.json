@@ -35,6 +35,7 @@
     "bench:mcp": "node bench/mcp-redteam.mjs",
     "bench:max": "node bench/maxstress.mjs",
     "bench:native": "node native/bench.mjs",
+    "fuzz": "node fuzz/run.mjs",
     "arena": "node arena/run.mjs",
     "arena:corpus": "node arena/build-corpus.mjs",
     "arena:external": "node arena/run.mjs --corpus external-corpus.json"

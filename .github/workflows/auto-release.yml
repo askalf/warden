@@ -28,12 +28,14 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push tag + create GitHub release
+      actions: write # dispatch publish.yml (the OIDC npm publisher)
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
