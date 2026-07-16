@@ -9,6 +9,16 @@ export const NET = ['fetch', 'http', 'request', 'webhook', 'post', 'curl'];
 export const WRITE = ['write', 'edit', 'create', 'append', 'notebookedit'];
 export const READONLY = ['read', 'get', 'list', 'ls', 'grep', 'glob', 'status', 'stat'];
 
+// Homoglyph/zero-width evasion folding. Hoisted to module scope (built once, not
+// per classify() call on the hot path). NON_ASCII_RE gates the work: NFKC is the
+// identity on ASCII and every stripped char is ≥ U+00AD, so a pure-ASCII command
+// needs neither. ZW_RE strips the same set the old inline Set did — soft-hyphen,
+// zero-width joiners/spaces, and bidi/invisible formatting marks used to split
+// keywords (r<zwsp>m → rm). ZW_RE is global (replace-all); NON_ASCII_RE is not
+// (used with .test(), so no lastIndex statefulness).
+const NON_ASCII_RE = /[^\x00-\x7F]/;
+const ZW_RE = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
+
 // A piped remote download into an interpreter (RCE). The interpreter need NOT sit
 // immediately after the pipe: an attacker interposes a wrapper (env/sudo/xargs/
 // timeout/setsid/nice/…), a full path (/bin/sh), or quotes/backslashes ("bash",
@@ -258,9 +268,10 @@ export function classify(action) {
     // defeat fullwidth/homoglyph evasion (NFKC maps ＲＭ → RM, etc.) and strip
     // invisible formatting chars (zero-width, soft-hyphen, bidi) used to split
     // keywords — a zero-width split like r<zwnj>m becomes rm. None belong here.
-    cmd = cmd.normalize('NFKC');
-    const ZW = new Set([0x00AD,0x200B,0x200C,0x200D,0x200E,0x200F,0x202A,0x202B,0x202C,0x202D,0x202E,0x2060,0x2061,0x2062,0x2063,0x2064,0xFEFF]);
-    if (ZW.size) cmd = Array.from(cmd, (c) => (ZW.has(c.codePointAt(0)) ? '' : c)).join('');
+    // Both only change NON-ASCII input, so skip them on a pure-ASCII command (the
+    // overwhelming common case): the result is byte-identical, the guard just
+    // avoids a normalize + full code-point rebuild on every clean tool call.
+    if (NON_ASCII_RE.test(cmd)) cmd = cmd.normalize('NFKC').replace(ZW_RE, '');
     if (cmd.length > 16384) { why.push('⚠ oversized command (' + cmd.length + 'B) — gated for review'); return { tier: TIER.RED, why }; }
     if (!SHELL.includes(tool)) why.push('⚠ shell-command field on a non-shell tool (' + (tool || 'unknown') + ')');
     // match against the command with quoted DATA neutralized (so an attack string
