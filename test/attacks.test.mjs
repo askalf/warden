@@ -132,7 +132,17 @@ test('more destructive blocked (long flags / win / find)', () => {
   block({ tool: 'shell', input: { command: 'find / -delete' } });
   block({ tool: 'shell', input: { command: 'rm --recursive --force /' } });
   block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\' } });
+  block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\Users' } });
+  block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\Users\\bob' } });
+  block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force "C:\\Users\\bob"' } });
+  block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\Users\\bob; echo done' } });
+  block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\Windows\\System32\\config' } });
   block({ tool: 'powershell', input: { command: 'Format-Volume -DriveLetter C -Force' } });
+});
+
+test('deep per-user Remove-Item is not a system root (red approve, not black)', () => {
+  approve({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force "C:\\Users\\bob\\Desktop\\my proj\\_worktree"' } });
+  approve({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\code\\repo\\node_modules' } });
 });
 
 test('hardening adds NO false positives (read/list/legit forms stay clean)', () => {
