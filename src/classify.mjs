@@ -164,12 +164,16 @@ export const BLACK_SHELL = [
   { re: />\s*\/dev\/(?:sd|nvme|hd|disk|vd)[a-z]*\d*\b/i, why: 'overwrites a raw block device' },
   { re: /\bshred\b\s+(?:-\S+\s+)*[\\/](?:etc|boot|dev|var|usr|home|root)\b/i, why: 'shreds a system file' },
   { re: /\bcipher\b[^|]*\/w:/i, why: 'cipher secure-wipe' },
-  { re: /\bRemove-Item\b(?=[^|]*-Recurse\b)(?=[^|]*-Force\b)[^|]*[A-Za-z]:\\(?:[\s"']|$|Windows|Program|Users\b)/i, why: 'recursive force-delete of a Windows drive/system root' },
+  // `Users` blacks only C:\Users itself or a WHOLE profile (one segment, then
+  // end-of-target) — a deep per-user path (…\Desktop\proj\dir) is not a system
+  // root; the RED_SHELL Remove-Item rule still surfaces those for review.
+  { re: /\bRemove-Item\b(?=[^|]*-Recurse\b)(?=[^|]*-Force\b)[^|]*[A-Za-z]:\\(?:[\s"']|$|Windows\b|Program|Users(?:\\[^\\"';|&]+)?\\?["']?\s*(?:$|[;|&]))/i, why: 'recursive force-delete of a Windows drive/system root' },
   { re: /\bFormat-Volume\b|\bformat\s+[A-Za-z]:\s/i, why: 'formats a volume' },
 ];
 export const RED_SHELL = [
   { re: /\bsudo\b/i, why: 'privilege escalation' },
   { re: /(?<![-\w])rm\s+\S/i, why: 'file deletion' },
+  { re: /\bRemove-Item\b(?=[^;\n]*-Recurse\b)(?=[^;\n]*-Force\b)[^;\n]*[A-Za-z]:\\/i, why: 'recursive force-delete of an absolute path (PowerShell)' },
   { re: /\bgit\s+push\b/i, why: 'outward-facing: pushes code' },
   { re: /\b(npm|pnpm|yarn|pip|apt|brew|choco)\s+(i|install|add)\b/i, why: 'installs packages (supply-chain)' },
   { re: /\b(?:npx|pnpm\s+dlx|yarn\s+dlx|bunx|uvx|pipx\s+run)\b/i, why: 'runs an arbitrary remote package (npx/uvx)' },
