@@ -25,7 +25,12 @@ function destPaths(input) {
 // which no configured root prefixes — correctly flagged as outside.)
 function normPath(p) {
   const n = path.posix.normalize(String(p).replace(/\\/g, '/'));
-  return n.replace(/\/+$/, '') || (n.startsWith('/') ? '/' : '.');
+  // posix.normalize already collapses runs of `/` to one, so there is at most a
+  // single trailing slash to drop — strip it without a `\/+$`-style regex (that
+  // pattern trips a polynomial-ReDoS scanner on repeated-slash input, moot here
+  // but avoided). Keep the bare root `/` and the relative marker `.` intact.
+  if (n === '/' || n === '.') return n;
+  return n.endsWith('/') ? n.slice(0, -1) : n;
 }
 // True iff `p` is the root itself or genuinely BENEATH it — a `startsWith`
 // on the normalized path with a separator boundary, so a shared-prefix sibling
