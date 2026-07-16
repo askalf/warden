@@ -35,12 +35,22 @@ export function startDaemon({
 } = {}) {
   let policy = configPath ? loadPolicy(configPath) : {};
   // Tamper-evident, streaming audit straight to disk (no in-memory buffer to leak).
-  const fileAudit = auditPath ? new ChainedFileAudit(auditPath) : null;
+  // checkpoint:true anchors the chain HEAD in a 0600 sidecar so a live daemon's
+  // log can't be silently tail-truncated (see audit.mjs).
+  const fileAudit = auditPath ? new ChainedFileAudit(auditPath, { checkpoint: true }) : null;
   // Capability token: published only into the 0600 discovery file, so only a
   // process that can read that file (the owner) can talk to the daemon. Closes
   // the unauth'd-local-process vectors (LLM-proxy abuse via the judge tier,
   // audit pollution). Enforced whenever a token exists; honors WARDEN_TOKEN.
   const token = (tcp || process.env.WARDEN_TOKEN) ? (process.env.WARDEN_TOKEN || crypto.randomBytes(18).toString('base64url')) : null;
+  // Compare the presented token in CONSTANT TIME. A plain `!==` returns early on
+  // the first differing byte, leaking a timing oracle a local attacker on the
+  // loopback listener could walk to recover the token. Comparing fixed-length
+  // SHA-256 digests is both constant-time and length-independent.
+  const tokenDigest = token ? crypto.createHash('sha256').update(token).digest() : null;
+  const tokenMatches = (presented) =>
+    tokenDigest != null &&
+    crypto.timingSafeEqual(crypto.createHash('sha256').update(typeof presented === 'string' ? presented : '').digest(), tokenDigest);
   let served = 0;
 
   // Hot-reload policy on change. unref() so the watcher never keeps the process
@@ -78,7 +88,7 @@ export function startDaemon({
         // Reject unauthenticated callers. Hook shape gets an empty line (the
         // client reads that as "defer" and falls back to its own in-process
         // check — fail-safe, never fail-open); action shape gets an error.
-        if (token && req.token !== token) {
+        if (token && !tokenMatches(req.token)) {
           sock.write((isHook ? '' : JSON.stringify({ error: 'unauthorized' })) + '\n'); continue;
         }
 

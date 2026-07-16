@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { AuditLog, ChainedFileAudit, verifyAuditFile, lastHashOf } from '../src/audit.mjs';
+import { AuditLog, ChainedFileAudit, verifyAuditFile, lastHashOf, chainStateOf, readCheckpoint } from '../src/audit.mjs';
 
 // Private, unguessable temp dir (random name, 0700) — no predictable tmpdir paths.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warden-audit-'));
@@ -99,6 +99,118 @@ test('stripping a record’s prev/hash to disguise an edit is still caught', () 
 
 test('lastHashOf returns GENESIS for a missing/empty file', () => {
   assert.equal(lastHashOf(path.join(dir, 'nope.jsonl')), '0'.repeat(64));
+});
+
+// ── tail-truncation (the gap a plain hash chain can't see) ──
+
+test('tail-truncation IS caught against a checkpoint', () => {
+  const p = path.join(dir, 'trunc.jsonl');
+  try { fs.unlinkSync(p); fs.unlinkSync(p + '.chk'); } catch {}
+  const a = new ChainedFileAudit(p, { checkpoint: true });
+  a.record({ tool: 'read', msg: 'benign 1' });
+  a.record({ tool: 'shell', msg: 'MALICIOUS' }); // the entry an attacker wants gone
+  a.record({ tool: 'read', msg: 'benign 3' });
+  // the sidecar anchors {count:3, head}
+  assert.deepEqual(readCheckpoint(p), { head: a.head, count: 3 });
+  assert.equal(verifyAuditFile(p).ok, true);
+  // attacker truncates back to the first (benign) record — a valid PREFIX
+  const lines = fs.readFileSync(p, 'utf8').split('\n').filter(Boolean);
+  fs.writeFileSync(p, lines[0] + '\n');
+  const r = verifyAuditFile(p);
+  assert.equal(r.ok, false, 'truncated tail must be detected');
+  assert.equal(r.reason, 'truncated');
+  fs.unlinkSync(p); fs.unlinkSync(p + '.chk');
+});
+
+test('a restart continues the checkpointed chain and truncation stays detectable', () => {
+  const p = path.join(dir, 'trunc-restart.jsonl');
+  try { fs.unlinkSync(p); fs.unlinkSync(p + '.chk'); } catch {}
+  let a = new ChainedFileAudit(p, { checkpoint: true });
+  a.record({ tool: 'shell', msg: '1' });
+  a.record({ tool: 'shell', msg: '2' });
+  a = new ChainedFileAudit(p, { checkpoint: true }); // "restart": re-seeds head AND count
+  assert.equal(a.count, 2);
+  a.record({ tool: 'shell', msg: '3' });
+  assert.equal(verifyAuditFile(p).ok, true);
+  // even after a restart, lopping off the last record is caught
+  const lines = fs.readFileSync(p, 'utf8').split('\n').filter(Boolean);
+  fs.writeFileSync(p, lines.slice(0, 2).join('\n') + '\n');
+  assert.equal(verifyAuditFile(p).ok, false);
+  fs.unlinkSync(p); fs.unlinkSync(p + '.chk');
+});
+
+test('deleting the whole log is caught when a checkpoint expected records', () => {
+  const p = path.join(dir, 'trunc-gone.jsonl');
+  try { fs.unlinkSync(p); fs.unlinkSync(p + '.chk'); } catch {}
+  const a = new ChainedFileAudit(p, { checkpoint: true });
+  a.record({ tool: 'shell', msg: '1' });
+  fs.unlinkSync(p); // file gone, sidecar remains
+  const r = verifyAuditFile(p);
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'truncated');
+  fs.unlinkSync(p + '.chk');
+});
+
+test('rollback (replaying an older-but-valid chain) is caught against a checkpoint', () => {
+  const p = path.join(dir, 'rollback.jsonl');
+  try { fs.unlinkSync(p); } catch {}
+  const a = new ChainedFileAudit(p);
+  a.record({ tool: 'shell', msg: '1' });
+  a.record({ tool: 'shell', msg: '2' });
+  const good = chainStateOf(p); // remember {head, count:2} out-of-band
+  // attacker rewrites the log to a DIFFERENT but internally-valid 1-record chain
+  try { fs.unlinkSync(p); } catch {}
+  const b = new ChainedFileAudit(p);
+  b.record({ tool: 'read', msg: 'forged' });
+  assert.equal(verifyAuditFile(p).ok, true, 'the forged chain is internally consistent');
+  const r = verifyAuditFile(p, good);
+  assert.equal(r.ok, false, 'but it does not match the trusted checkpoint');
+  fs.unlinkSync(p);
+});
+
+test('a stale checkpoint does NOT false-alarm on a log that grew past it', () => {
+  const p = path.join(dir, 'grew.jsonl');
+  try { fs.unlinkSync(p); } catch {}
+  const a = new ChainedFileAudit(p);
+  a.record({ tool: 'shell', msg: '1' });
+  a.record({ tool: 'shell', msg: '2' });
+  const cp = chainStateOf(p);          // trusted checkpoint at count:2
+  a.record({ tool: 'shell', msg: '3' }); // legitimate growth past the checkpoint
+  a.record({ tool: 'shell', msg: '4' });
+  assert.equal(verifyAuditFile(p, cp).ok, true, 'growth past a checkpoint verifies — only the prefix is pinned');
+  fs.unlinkSync(p);
+});
+
+test('truncate-and-regrow to the same length is caught by a trusted checkpoint', () => {
+  const p = path.join(dir, 'regrow.jsonl');
+  try { fs.unlinkSync(p); } catch {}
+  const a = new ChainedFileAudit(p);
+  a.record({ tool: 'read',  msg: '1' });
+  a.record({ tool: 'shell', msg: 'MALICIOUS 2' });
+  a.record({ tool: 'read',  msg: '3' });
+  const cp = chainStateOf(p);          // trusted {head, count:3} kept off-box
+  // attacker truncates entry 1's chain and rebuilds 3 forged records
+  try { fs.unlinkSync(p); } catch {}
+  const b = new ChainedFileAudit(p);
+  b.record({ tool: 'read', msg: '1' });
+  b.record({ tool: 'read', msg: 'forged 2' });
+  b.record({ tool: 'read', msg: 'forged 3' });
+  assert.equal(verifyAuditFile(p).ok, true, 'the forged 3-record chain is internally consistent');
+  const r = verifyAuditFile(p, cp);
+  assert.equal(r.ok, false, 'but the checkpointed head is not at position 3');
+  assert.equal(r.reason, 'rollback');
+  fs.unlinkSync(p);
+});
+
+test('no checkpoint → verifyAuditFile shape is unchanged (back-compat)', () => {
+  const p = path.join(dir, 'nochk.jsonl');
+  try { fs.unlinkSync(p); } catch {}
+  const a = new ChainedFileAudit(p); // default: no sidecar written
+  a.record({ tool: 'shell', decision: 'block' });
+  a.record({ tool: 'read', decision: 'allow' });
+  assert.equal(readCheckpoint(p), null);
+  assert.deepEqual(verifyAuditFile(p), { ok: true, entries: 2 }); // exact legacy shape
+  fs.unlinkSync(p);
 });
 
 test('an oversized final record does not re-root the chain across a restart', () => {

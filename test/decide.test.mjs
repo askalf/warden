@@ -32,6 +32,26 @@ test('poisoned skill blocks an otherwise-benign action', () => {
 test('write outside roots needs approval', () => {
   assert.equal(check({ tool: 'write', input: { path: '/etc/x' } }, policy).decision, 'approve');
 });
+test('write inside a root is not flagged as outside', () => {
+  const v = check({ tool: 'write', input: { path: 'src/deep/nested/a.ts' } }, policy);
+  assert.ok(!v.why.some((w) => /outside allowed roots/.test(w)));
+});
+test('.. traversal cannot escape a write root undetected', () => {
+  // `src/../../var/www/x` normalizes OUT of src/ — a naive startsWith(root) let it
+  // pass; it must be gated as outside-roots. (Non-persistence target so the
+  // write-root gate — not the persistence rule — is what's under test.)
+  const v = check({ tool: 'write', input: { path: 'src/../../var/www/other/config.js' } }, policy);
+  assert.ok(v.why.some((w) => /outside allowed roots/.test(w)), 'traversal must be flagged');
+  assert.equal(v.decision, 'approve');
+});
+test('a shared-prefix sibling directory is not treated as inside a root', () => {
+  // root 'data' must NOT admit 'database/…' (shared string prefix, different dir).
+  const p = { writeRoots: ['data'] };
+  const inside = check({ tool: 'write', input: { path: 'data/ok.txt' } }, p);
+  assert.ok(!inside.why.some((w) => /outside allowed roots/.test(w)), 'data/ is inside');
+  const sibling = check({ tool: 'write', input: { path: 'database/evil.txt' } }, p);
+  assert.ok(sibling.why.some((w) => /outside allowed roots/.test(w)), 'database/ is a sibling, not inside');
+});
 
 // data-at-rest is not execution: writing a file that CONTAINS a secret or an
 // injection phrase is flagged (red), not hard-blocked (black).

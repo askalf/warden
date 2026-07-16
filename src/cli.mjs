@@ -46,7 +46,8 @@ export function formatVerify(r) {
     const extra = r.unchained ? ` (${r.unchained} unchained/foreign line${r.unchained === 1 ? '' : 's'} skipped)` : '';
     return { ok: true, exitCode: 0, message: `✓ audit intact — ${r.entries} chained ${r.entries === 1 ? 'entry' : 'entries'}${extra}` };
   }
-  return { ok: false, exitCode: 2, message: `✗ TAMPER DETECTED at entry ${r ? r.at : '?'}` };
+  const reason = r && r.reason ? ` (${r.reason})` : '';
+  return { ok: false, exitCode: 2, message: `✗ TAMPER DETECTED at entry ${r ? r.at : '?'}${reason}` };
 }
 
 async function main() {

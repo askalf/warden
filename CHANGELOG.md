@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.1] - 2026-07-16
+
+### Security
+- **Audit tail-truncation is now detectable.** A hash chain proves no past record
+  was edited or deleted from the *middle*, but a valid *prefix* still verifies — so
+  deleting the most-recent entries (the ones recording an attacker's own action)
+  went unnoticed, and a restart re-seeded from the truncated tail. `ChainedFileAudit`
+  can now anchor the chain head in a `0600` `<audit>.chk` checkpoint (`{ checkpoint: true }`,
+  which the streaming daemon enables), and `verifyAuditFile(path, { head, count })`
+  flags a log that no longer ends where the checkpoint says (`truncated`/`rollback`,
+  surfaced by `redstamp verify`). A same-directory attacker who rewrites both is still
+  out of reach of a same-fs sidecar; retain the checkpoint on separate-trust storage
+  for full protection. SECURITY.md's tamper-evidence scope updated to match.
+- **Write-root confinement no longer bypassable by `..` traversal or a shared-prefix
+  sibling.** The `writeRoots` gate compared paths with a raw `startsWith`, so
+  `src/../../etc/x` (traverses out) and a `data` root admitting `database/…` (shared
+  string prefix) both slipped the review gate. Paths are now normalized (`.`/`..`
+  collapsed) and matched on a separator boundary.
+- **Daemon capability token compared in constant time.** The `!==` check returned
+  early on the first differing byte — a timing oracle a local process on the loopback
+  listener could walk. Now a fixed-length SHA-256 digest comparison via
+  `crypto.timingSafeEqual` (constant-time and length-independent).
+
 ## [0.5.0] - 2026-07-11
 
 ### Changed

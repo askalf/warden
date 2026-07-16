@@ -1,4 +1,5 @@
 // warden — own your agent security. A guard between an agent and its tools.
+import path from 'node:path';
 import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
 import { scanSecrets, injectionHits, obfuscationHits, isExternal, ipScope, safeStringify, asStr, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
 import { matchRule, DEFAULT_POLICY, loadPolicy, normalizePolicy, resolveConfig } from './policy.mjs';
@@ -15,6 +16,31 @@ function destPaths(input) {
   if (!input || typeof input !== 'object') return out;
   for (const [k, v] of Object.entries(input)) if (typeof v === 'string' && DEST_KEY_RE.test(k)) out.push(v);
   return out;
+}
+
+// Normalize a path for write-root confinement: unify separators and COLLAPSE
+// `.`/`..` segments, so `root/../../etc/x` can't traverse out of the root and a
+// trailing slash doesn't matter. Uses posix semantics on both platforms for a
+// deterministic result. (`..` that walks above the root stays as leading `..`,
+// which no configured root prefixes — correctly flagged as outside.)
+function normPath(p) {
+  const n = path.posix.normalize(String(p).replace(/\\/g, '/'));
+  // posix.normalize already collapses runs of `/` to one, so there is at most a
+  // single trailing slash to drop — strip it without a `\/+$`-style regex (that
+  // pattern trips a polynomial-ReDoS scanner on repeated-slash input, moot here
+  // but avoided). Keep the bare root `/` and the relative marker `.` intact.
+  if (n === '/' || n === '.') return n;
+  return n.endsWith('/') ? n.slice(0, -1) : n;
+}
+// True iff `p` is the root itself or genuinely BENEATH it — a `startsWith`
+// on the normalized path with a separator boundary, so a shared-prefix sibling
+// (`/srv/data` vs `/srv/database`) does not count as inside.
+function withinRoots(p, roots) {
+  const target = normPath(p);
+  return roots.some((r) => {
+    const root = normPath(r);
+    return target === root || target.startsWith(root === '/' ? '/' : root + '/');
+  });
 }
 
 /** Deterministic verdict for an action. No I/O, no LLM — pure + offline. */
@@ -92,7 +118,7 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   }
   if (writeRoots && WRITE.includes(tool)) {
     const p = wpath;
-    if (p && !writeRoots.some((r) => p.startsWith(r))) {
+    if (p && !withinRoots(p, writeRoots)) {
       tier = worst(tier, TIER.RED);
       why.push('⚠ write outside allowed roots: ' + p);
     }

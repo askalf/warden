@@ -93,6 +93,47 @@ test('daemon isolates taint across DIFFERENT connections (no cross-agent contami
   }
 });
 
+// A raw request/response over one connection (no client helper) so we can drive
+// the auth gate with an arbitrary/wrong token.
+function rawRequest(socketPath, obj) {
+  return new Promise((resolve, reject) => {
+    const s = net.createConnection(socketPath);
+    let buf = '';
+    s.on('connect', () => s.write(JSON.stringify(obj) + '\n'));
+    s.on('data', (d) => {
+      buf += d.toString();
+      const i = buf.indexOf('\n');
+      if (i >= 0) { s.end(); resolve(buf.slice(0, i)); }
+    });
+    s.on('error', reject);
+    setTimeout(() => { s.destroy(); reject(new Error('timeout')); }, 3000);
+  });
+}
+
+test('token auth (constant-time): correct token answers, wrong/absent is unauthorized', async () => {
+  process.env.WARDEN_TOKEN = 'sekret-capability-token';
+  const s = process.platform === 'win32' ? '\\\\.\\pipe\\warden-tok-' + process.pid : '/tmp/warden-tok-' + process.pid + '.sock';
+  const server = startDaemon({ socketPath: s, configPath: null });
+  await new Promise((r) => setTimeout(r, 150));
+  try {
+    const action = { tool: 'read', input: { path: 'x' } };
+    const good = JSON.parse(await rawRequest(s, { action, token: 'sekret-capability-token' }));
+    assert.equal(good.decision, 'allow', 'correct token → real verdict');
+
+    const wrong = JSON.parse(await rawRequest(s, { action, token: 'sekret-capability-toke_' })); // same length, last byte off
+    assert.equal(wrong.error, 'unauthorized', 'wrong token rejected');
+
+    const shortTok = JSON.parse(await rawRequest(s, { action, token: 'x' })); // different length
+    assert.equal(shortTok.error, 'unauthorized', 'length mismatch rejected (no timingSafeEqual throw)');
+
+    const none = JSON.parse(await rawRequest(s, { action })); // no token
+    assert.equal(none.error, 'unauthorized', 'absent token rejected');
+  } finally {
+    delete process.env.WARDEN_TOKEN;
+    await new Promise((r) => server.close(r));
+  }
+});
+
 test('a non-TCP daemon close() does NOT delete a pre-existing info file (cleanup guard)', async () => {
   // regression: a tcp:false daemon (default infoFile) once wiped the live ~/.warden/daemon.json on close.
   const sentinel = path.join(dir, 'sentinel.json');
