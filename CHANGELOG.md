@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+- **The native `warden-fast` hook client no longer fails OPEN against a token-gated
+  daemon.** The daemon gates its loopback listener with a per-start capability token
+  (published into the `0600` discovery file) and answers an *unauthenticated*
+  hook-shaped request with an empty line — which the client relayed as "allow". Since
+  a `tcp` daemon always mints that token, `warden-fast` was silently allowing every
+  tool call whenever it talked to a real daemon (the in-process node hook was
+  unaffected). `warden-fast` now reads the token from the same discovery file it
+  already reads the port from and injects it into the forwarded payload; if the
+  payload isn't parseable JSON it declines the fast path and falls back to the
+  in-process node hook, so it fails **safe**, never open. A tokenless daemon keeps the
+  zero-parse byte-pipe path. `native/smoke.mjs` now asserts the token gate is active
+  (an unauthenticated request gets an empty line) before checking that the client
+  authenticates past it — so a regression can't pass silently.
+
 ## [0.5.1] - 2026-07-16
 
 ### Security
