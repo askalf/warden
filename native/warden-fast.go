@@ -66,10 +66,35 @@ func tryDaemon(payload []byte) (out []byte, ok bool) {
 		return nil, false
 	}
 	var info struct {
-		Port int `json:"port"`
+		Port  int    `json:"port"`
+		Token string `json:"token"`
 	}
 	if json.Unmarshal(raw, &info) != nil || info.Port <= 0 {
 		return nil, false
+	}
+	// The daemon gates its loopback listener with a per-start capability token,
+	// published into the same 0600 discovery file. Inject it into the hook
+	// payload so the daemon authenticates us — WITHOUT it the daemon answers a
+	// hook-shaped request with an empty line, which we would relay as "allow"
+	// and fail OPEN. Only touch the bytes when a token is present (a tokenless
+	// daemon keeps the zero-parse byte-pipe path); if the payload isn't parseable
+	// JSON we can't authenticate it, so return not-ok and let main() fall back to
+	// the in-process node hook — fail SAFE, never open.
+	if info.Token != "" {
+		var obj map[string]json.RawMessage
+		if json.Unmarshal(payload, &obj) != nil {
+			return nil, false
+		}
+		tok, err := json.Marshal(info.Token)
+		if err != nil {
+			return nil, false
+		}
+		obj["token"] = tok
+		merged, err := json.Marshal(obj)
+		if err != nil {
+			return nil, false
+		}
+		payload = merged
 	}
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(info.Port)), dialTimeout)
 	if err != nil {
