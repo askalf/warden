@@ -28,14 +28,25 @@ Coverage is **measured, not assumed**: `npm run bench` scores a 245-sample label
 
 ## Quick start
 
-> Not yet on npm — installs straight from GitHub:
+> Not yet on npm — installs straight from the signed GitHub release:
 
 ```sh
-npm i github:askalf/redstamp          # npm ≤ 11
-npm i --allow-git github:askalf/redstamp   # npm ≥ 12 blocks git deps by default
+npm i https://github.com/askalf/redstamp/releases/latest/download/redstamp.tgz
 ```
 
-> [npm v12 blocks git dependencies by default](https://github.blog/changelog/2026-06-09-upcoming-breaking-changes-for-npm-v12/) (a supply-chain hardening redstamp applauds — it closes an `.npmrc`-overrides-git RCE path). redstamp has zero dependencies and no install scripts, so `--allow-git` is the only flag you need.
+Or the one-line global install (puts the `redstamp` CLI on your PATH):
+
+```sh
+curl -fsSL https://ownyourstack.com/redstamp.sh | sh
+```
+
+```powershell
+powershell -c "irm https://ownyourstack.com/redstamp.ps1 | iex"
+```
+
+Every tarball is packed in CI and signed with keyless Sigstore. A security tool shouldn't ask for blind trust: download [`redstamp.tgz`](https://github.com/askalf/redstamp/releases/latest/download/redstamp.tgz), run `gh attestation verify redstamp.tgz --owner askalf`, then `npm i ./redstamp.tgz` — same bytes, provenance checked.
+
+> Git installs (`npm i --allow-git github:askalf/redstamp`) still work; the tarball route needs no flags on npm ≥ 12, which [blocks git dependencies by default](https://github.blog/changelog/2026-06-09-upcoming-breaking-changes-for-npm-v12/) (a supply-chain hardening redstamp applauds — it closes an `.npmrc`-overrides-git RCE path).
 
 ```js
 import { check, AuditLog } from '@askalf/redstamp';

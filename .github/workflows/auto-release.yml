@@ -185,7 +185,12 @@ jobs:
         run: |
           set -euo pipefail
           cp "$BUNDLE" "${TARBALL}.sigstore.json"
-          gh release upload "$TAG" --clobber "$TARBALL" "${TARBALL}.sigstore.json"
+          # Stable-named copies: releases/latest/download/redstamp.tgz is pinned by
+          # the README install command and ownyourstack.com/redstamp.{sh,ps1} —
+          # renaming these assets breaks every published install one-liner.
+          cp "$TARBALL" redstamp.tgz
+          cp "${TARBALL}.sigstore.json" redstamp.tgz.sigstore.json
+          gh release upload "$TAG" --clobber "$TARBALL" "${TARBALL}.sigstore.json" redstamp.tgz redstamp.tgz.sigstore.json
 
       - name: Dispatch npm publish (OIDC via publish.yml)
         if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
