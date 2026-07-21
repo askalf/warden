@@ -1,6 +1,6 @@
 {
   "name": "@askalf/redstamp",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "own your agent security — a guard between an agent and its tools: risk classification, policy, secret-exfil + prompt-injection defense, tamper-evident audit, MCP middleware. Part of Own Your Stack.",
   "type": "module",
   "exports": {

@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-21
+
+### Added
+- **Detectors expose the matched span (`hits[]`) for evidence surfacing.** `matchOf()`
+  and `injectionHitsDetailed()` return `{ flag, match, start, end }`, and
+  `scanMcpTools` attaches a parallel `hits: [{ flag, match }]` to each finding — same
+  order and conditions as `flags` — so a finding can be checked against the exact
+  source bytes that produced it. Strictly additive: `flags`/`why` output is
+  byte-for-byte unchanged.
+
+### Fixed
+- **Windows/PowerShell/cmd destructive deletes are now classified.** The shell ruleset
+  blacked Unix `rm -rf /`, but its Windows equivalents fell through to the read-only
+  `green` default — `Remove-Item -Recurse -Force C:/` (forward slash is valid on
+  Windows), `$env:USERPROFILE` targets, the `ri`/`rmdir`/`rd`/`del` aliases with
+  truncated `-r`/`-fo` flags, cmd's `rd /s /q` and `del /f /s /q C:\*`, a
+  `Get-ChildItem -Recurse` piped into a force-delete, and `reg delete` of a machine
+  hive (SYSTEM/SOFTWARE/SAM/SECURITY). All now black, **scoped to a system/drive root**
+  so ordinary project cleanup (`Remove-Item -Recurse -Force node_modules`,
+  `rd /s /q .\build`) stays benign. Forced shutdown/reboot (`Stop-Computer`,
+  `Restart-Computer`, `shutdown /s|/r`) gates as red. Adds a `destructive-win` bench
+  family so the gap can't silently reopen.
+- **A `Program`-prefixed path is no longer mistaken for a system root.** Both the new
+  and the pre-existing Windows drive-root matchers accepted a bare `Program`, so
+  `C:\Programming\myrepo\build` and `C:\Programs\tool` matched the system-root branch
+  and hard-blocked. Now anchored to `Program Files` (including `(x86)`).
+- **Prose flag values are treated as data, not live commands.** A `gh pr create
+  --body "…"`, `gh issue --description`, or `gh release --notes` whose text merely
+  *documents* a dangerous command was matched as though the command were live.
+  `neutralizeQuotedData` now blanks those quoted values exactly as it already did for
+  `-m`/`--message`/`--grep`. Deliberately **not** extended to curl's
+  `-d`/`--data`/`-F`/`-T`/`--post-file`, which carry the exfil payload the black rules
+  must keep seeing; a real command chained after the flag (`… --body x; rm -rf /`)
+  still blocks.
+
 ### Security
 - **The native `warden-fast` hook client no longer fails OPEN against a token-gated
   daemon.** The daemon gates its loopback listener with a per-start capability token
