@@ -209,6 +209,32 @@ export const YELLOW_SHELL = [
   { re: /(^|\s)(echo|printf)\b[^|]*>{1,2}/i, why: 'writes to a file' },
 ];
 
+// --- Windows destructive deletes: PowerShell + cmd. The Unix ruleset above blacks
+//     `rm -rf /` but its Windows equivalents (`Remove-Item -Recurse -Force C:/`,
+//     `rd /s /q C:\Windows`, `del /f /s /q C:\*`, …) scored green/allow. These
+//     close that gap — slash-agnostic (`C:\` and `C:/` both valid on Windows),
+//     alias-aware (ri/rmdir/rd/del/erase), and truncated-flag-aware (-r/-rec, -fo).
+//     SCOPED to a system/drive ROOT via WIN_ROOT, so cleaning a project dir
+//     (`Remove-Item -Recurse -Force node_modules`, `rd /s /q .\build`) stays benign.
+const WIN_ROOT = String.raw`(?:[A-Za-z]:[\\/](?:[\s"';|&]|\*|$|Windows\b|System32\b|Program|ProgramData\b|Users(?:[\\/][^\\/"';|&\s]+)?[\\/]?(?=[\s"';|&]|$))|[A-Za-z]:(?=[\s"';|&*]|$)|\$env:(?:USERPROFILE|SystemRoot|windir|SystemDrive|ProgramFiles(?:\(x86\))?|ALLUSERSPROFILE|APPDATA|LOCALAPPDATA|HOMEPATH)\b|\$HOME\b|%(?:USERPROFILE|SystemRoot|windir|SystemDrive|ProgramFiles(?:\(x86\))?|ALLUSERSPROFILE|APPDATA|LOCALAPPDATA)%)`;
+const WIN_RECURSE = String.raw`-r(?:ec(?:urse)?)?\b`; // -r / -rec / -recurse
+const WIN_FORCE = String.raw`-fo(?:rce)?\b`;          // -fo / -force (bare -f is -Filter-ambiguous in PS)
+BLACK_SHELL.push(
+  // PowerShell: Remove-Item (+ aliases) with recurse AND force at a system/drive root.
+  { re: new RegExp(String.raw`\b(?:Remove-Item|ri|rmdir|rd|del|erase)\b(?=[^|;\n]*\s${WIN_RECURSE})(?=[^|;\n]*\s${WIN_FORCE})[^|;\n]*${WIN_ROOT}`, 'i'), why: 'recursive force-delete of a Windows drive/system root (PowerShell)' },
+  // cmd.exe: rd/rmdir/del /s at a system/drive root or drive-wide wildcard.
+  { re: new RegExp(String.raw`\b(?:rd|rmdir|del|erase)\b(?=[^|;\n]*\s/s\b)[^|;\n]*${WIN_ROOT}`, 'i'), why: 'recursive delete of a Windows drive/system root (cmd)' },
+  // Get-ChildItem/dir -Recurse of a system root piped into a force-delete.
+  { re: new RegExp(String.raw`\b(?:Get-ChildItem|gci|dir|ls)\b(?=[^|\n]*\s${WIN_RECURSE})(?=[^|\n]*${WIN_ROOT})[^\n]*\|\s*(?:Remove-Item|ri|rm|rmdir|rd|del)\b[^\n]*\s${WIN_FORCE}`, 'i'), why: 'recursive enumerate of a system root piped to a force-delete' },
+  // reg delete of a critical machine hive (SYSTEM/SOFTWARE/SAM/SECURITY).
+  { re: /\breg(?:\.exe)?\s+delete\b[^|]*\bHK(?:LM|EY_LOCAL_MACHINE)[\\/]+(?:SYSTEM|SOFTWARE|SAM|SECURITY)\b/i, why: 'deletes a critical registry hive' },
+);
+RED_SHELL.push(
+  // Forced shutdown/reboot — disruptive and outward-visible, but recoverable → gate, not block.
+  { re: /\b(?:Stop-Computer|Restart-Computer)\b/i, why: 'shuts down / reboots the machine' },
+  { re: /\bshutdown(?:\.exe)?\b[^|]*\s\/(?:s|r|g)\b/i, why: 'shuts down / reboots the machine (shutdown /s|/r)' },
+);
+
 // Blank the quoted ARGUMENT of text-data flags so an attack string inside a
 // commit message, PR/issue body, or grep pattern isn't matched as a live command.
 // Surgical on purpose: only PROSE flags — -m/--message, --body/--description/--notes
