@@ -15,7 +15,13 @@ export const SECRET_RE = [
   { re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, why: 'JWT (signed token)' },
   { re: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/, why: 'private key' },
 ];
-export const SECRET_ENV_RE = /\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)\w*\}?/i;
+// Case-SENSITIVE by design. Environment variables are UPPER_SNAKE by universal
+// convention ($API_KEY, ${GITHUB_TOKEN}); a lowercase `$token` / `$key` is an
+// ordinary local variable. The case-insensitive form read AWS's pagination
+// cursor (`--next-token "$token"`) as a credential and helped red-board a
+// benign vendor skill twice (#87) - the same false-positive class the `.env`
+// lookbehind below was added for.
+export const SECRET_ENV_RE = /\$\{?[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*\}?/;
 // `.env` needs the lookbehind: `process.env` / `self.env` / `import.meta.env`
 // are ordinary CODE, not the dotenv FILE — scanning real marketplace skills,
 // bare `\.env\b` was the single largest false-positive source.
@@ -31,7 +37,14 @@ export const INJECTION_RE = [
   { re: /ignore\s+(?:all\s+|the\s+|your\s+)?(?:previous|prior|above)\s+(?:instructions|rules|prompt)/i, why: 'instruction-override' },
   { re: /\b(?:exfiltrate|leak|steal)\b/i, why: 'exfiltration intent' },
   { re: /disregard[^.]{0,20}(?:safety|guardrail|policy)/i, why: 'safety-bypass instruction' },
-  { re: /base64\s+-d\s*\|\s*(?:ba)?sh/i, why: 'obfuscated payload to shell' },
+  // The dropper shape is fetch-THEN-decode-into-a-shell: what makes it an attack
+  // is that the bytes come from OFF the machine. A script that base64s its own
+  // locally-built payload to ship it over a single-argument transport (AWS SSM's
+  // `command` takes one element, so HyperPod does exactly this) is a transport,
+  // not an attack. Gating on a fetch keeps the critical verdict honest; the bare
+  // shape below still SURFACES as an advisory so it is never silently dropped.
+  { re: /(?:curl|wget|Invoke-WebRequest|\biwr\b|https?:\/\/)[^\n]{0,160}?base64\s+-d\s*\|\s*(?:ba)?sh/i, why: 'obfuscated payload to shell' },
+  { re: /base64\s+-d\s*\|\s*(?:ba)?sh/i, why: 'base64 payload piped to a shell' },
   { re: /send\s+(?:all\s+|the\s+)?(?:files|secrets|env|credentials|keys)[^.]{0,40}(?:https?|webhook|curl)/i, why: 'data-exfil instruction' },
   { re: /\b(?:e-?mail|send|upload|post|transmit|forward|exfil\w*)\b\s+(?:all\s+|the\s+|every\s+|your\s+)?(?:secrets?|credentials?|api[ _-]?keys?|passwords?|tokens?|private\s+keys?|(?<!\w)\.env\b)\b[^.]{0,60}(?:@|https?:|webhook|attacker|to\s+\S+@)/i, why: 'data-exfil instruction (to a destination)' },
   { re: /reveal\s+(?:all\s+|the\s+|your\s+)?(?:secrets|system\s+prompt|prompt|api\s+keys|credentials)/i, why: 'system-prompt/secret extraction' },

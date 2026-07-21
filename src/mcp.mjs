@@ -146,7 +146,11 @@ export function guardHandler(handler, policy, opts = {}) {
  *    is exactly what the flag (unchanged) lets strict surfaces do.
  *    Existing consumers that only read `flags` are unaffected.
  */
-const ADVISORY_WORDS = new Set(['exfiltration intent']);
+// 'base64 payload piped to a shell' is advisory: the shape alone is a transport
+// idiom (see INJECTION_RE). Paired with a fetch it also raises the critical
+// 'obfuscated payload to shell', which is NOT advisory - so a real dropper still
+// blocks while a local self-encode only surfaces (#87).
+const ADVISORY_WORDS = new Set(['exfiltration intent', 'base64 payload piped to a shell']);
 export function scanMcpTools(tools = []) {
   const findings = [];
   if (!Array.isArray(tools)) return findings;           // fail-safe: a non-array tool list isn't scannable
