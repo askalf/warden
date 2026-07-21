@@ -177,7 +177,7 @@ export const BLACK_SHELL = [
   // `Users` blacks only C:\Users itself or a WHOLE profile (one segment, then
   // end-of-target) — a deep per-user path (…\Desktop\proj\dir) is not a system
   // root; the RED_SHELL Remove-Item rule still surfaces those for review.
-  { re: /\bRemove-Item\b(?=[^|]*-Recurse\b)(?=[^|]*-Force\b)[^|]*[A-Za-z]:\\(?:[\s"']|$|Windows\b|Program|Users(?:\\[^\\"';|&]+)?\\?["']?\s*(?:$|[;|&]))/i, why: 'recursive force-delete of a Windows drive/system root' },
+  { re: /\bRemove-Item\b(?=[^|]*-Recurse\b)(?=[^|]*-Force\b)[^|]*[A-Za-z]:\\(?:[\s"']|$|Windows\b|Program\s?Files(?:\s?\(x86\))?\b|Users(?:\\[^\\"';|&]+)?\\?["']?\s*(?:$|[;|&]))/i, why: 'recursive force-delete of a Windows drive/system root' },
   { re: /\bFormat-Volume\b|\bformat\s+[A-Za-z]:\s/i, why: 'formats a volume' },
 ];
 export const RED_SHELL = [
@@ -216,7 +216,7 @@ export const YELLOW_SHELL = [
 //     alias-aware (ri/rmdir/rd/del/erase), and truncated-flag-aware (-r/-rec, -fo).
 //     SCOPED to a system/drive ROOT via WIN_ROOT, so cleaning a project dir
 //     (`Remove-Item -Recurse -Force node_modules`, `rd /s /q .\build`) stays benign.
-const WIN_ROOT = String.raw`(?:[A-Za-z]:[\\/](?:[\s"';|&]|\*|$|Windows\b|System32\b|Program|ProgramData\b|Users(?:[\\/][^\\/"';|&\s]+)?[\\/]?(?=[\s"';|&]|$))|[A-Za-z]:(?=[\s"';|&*]|$)|\$env:(?:USERPROFILE|SystemRoot|windir|SystemDrive|ProgramFiles(?:\(x86\))?|ALLUSERSPROFILE|APPDATA|LOCALAPPDATA|HOMEPATH)\b|\$HOME\b|%(?:USERPROFILE|SystemRoot|windir|SystemDrive|ProgramFiles(?:\(x86\))?|ALLUSERSPROFILE|APPDATA|LOCALAPPDATA)%)`;
+const WIN_ROOT = String.raw`(?:[A-Za-z]:[\\/](?:[\s"';|&]|\*|$|Windows\b|System32\b|Program\s?Files(?:\s?\(x86\))?\b|ProgramData\b|Users(?:[\\/][^\\/"';|&\s]+)?[\\/]?(?=[\s"';|&]|$))|[A-Za-z]:(?=[\s"';|&*]|$)|\$env:(?:USERPROFILE|SystemRoot|windir|SystemDrive|ProgramFiles(?:\(x86\))?|ALLUSERSPROFILE|APPDATA|LOCALAPPDATA|HOMEPATH)\b|\$HOME\b|%(?:USERPROFILE|SystemRoot|windir|SystemDrive|ProgramFiles(?:\(x86\))?|ALLUSERSPROFILE|APPDATA|LOCALAPPDATA)%)`;
 const WIN_RECURSE = String.raw`-r(?:ec(?:urse)?)?\b`; // -r / -rec / -recurse
 const WIN_FORCE = String.raw`-fo(?:rce)?\b`;          // -fo / -force (bare -f is -Filter-ambiguous in PS)
 BLACK_SHELL.push(
