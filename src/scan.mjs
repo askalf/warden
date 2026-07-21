@@ -134,8 +134,26 @@ export function scanSecrets(action, text = safeStringify(action.input || {})) {
   return { flags, hosts, hasSecret: flags.length > 0 };
 }
 
+// First match of a (non-global) regex plus its offset — the exact evidence a rule
+// fired on. Clones a global regex so a stray /g can't carry lastIndex between calls.
+export function matchOf(re, text = '') {
+  const rx = re.global ? new RegExp(re.source, re.flags.replace('g', '')) : re;
+  const m = rx.exec(text);
+  return m ? { match: m[0], start: m.index, end: m.index + m[0].length } : null;
+}
+
+// Detailed form of injectionHits: the flag AND the substring it matched (with offset).
+export function injectionHitsDetailed(text = '') {
+  const out = [];
+  for (const p of INJECTION_RE) {
+    const m = matchOf(p.re, text);
+    if (m) out.push({ flag: p.why, match: m.match, start: m.start, end: m.end });
+  }
+  return out;
+}
+
 export function injectionHits(text = '') {
-  return INJECTION_RE.filter((p) => p.re.test(text)).map((p) => p.why);
+  return injectionHitsDetailed(text).map((h) => h.flag);
 }
 
 export function scanInjection(action, skillText = '') {
