@@ -172,3 +172,14 @@ test('hardening adds NO false positives (read/list/legit forms stay clean)', () 
   allow({ tool: 'shell', input: { command: 'python3 -c "print(2+2)"' } });
   allow({ tool: 'shell', input: { command: 'find /tmp -name "*.log" -delete' } });
 });
+
+test('C:\\Program* project dirs are NOT a system root (Program bare-prefix FP guard)', () => {
+  // "Program" must anchor as "Program Files"/"ProgramData", not any drive path
+  // that merely starts with the substring "Program".
+  approve({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\Programming\\myrepo\\build' } });
+  approve({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\Programs\\dev\\cache' } });
+  // Real Program Files / ProgramData system roots still hard-block.
+  block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\Program Files\\MyApp' } });
+  block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force "C:\\Program Files (x86)\\MyApp"' } });
+  block({ tool: 'powershell', input: { command: 'Remove-Item -Recurse -Force C:\\ProgramData' } });
+});
