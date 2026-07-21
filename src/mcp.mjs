@@ -3,7 +3,7 @@
 // the OpenClaw poisoned-skill / supply-chain class).
 import { check, recordVerdict } from './index.mjs';
 import { classify, TIER, ORDER, WRITE } from './classify.mjs';
-import { injectionHits, safeStringify, SENSITIVE_PATH_RE, SENSITIVE_PATH_EXFIL_RE, SECRET_ENV_RE } from './scan.mjs';
+import { injectionHits, injectionHitsDetailed, matchOf, safeStringify, SENSITIVE_PATH_RE, SENSITIVE_PATH_EXFIL_RE, SECRET_ENV_RE } from './scan.mjs';
 
 // Extract fetch-shaped fields, tolerating non-standard URL keys (target/href/link)
 // so a URL isn't lost just because the tool named its argument unusually.
@@ -162,11 +162,18 @@ export function scanMcpTools(tools = []) {
     // unrelated rows of a table can read as one verb→path→destination "clause".
     const text = safeStringify(t).replace(/\\r\\n|\\n|\\r/g, '\n');
     const flags = injectionHits(text); // NOT scanInjection — that would re-stringify and re-escape the newlines just normalized
-    if (SENSITIVE_PATH_EXFIL_RE.test(text)) flags.push('sensitive-path exfil instruction (path → destination)');
+    // hits: the same flags with the substring each matched, for evidence surfacing.
+    // Kept strictly parallel to `flags` (same order, same conditions) so the flag
+    // output is byte-for-byte unchanged; `hits` is purely additive.
+    const hits = injectionHitsDetailed(text).map((h) => ({ flag: h.flag, match: h.match }));
+    const exfilM = matchOf(SENSITIVE_PATH_EXFIL_RE, text);
+    if (exfilM) { flags.push('sensitive-path exfil instruction (path → destination)'); hits.push({ flag: 'sensitive-path exfil instruction (path → destination)', match: exfilM.match }); }
     let severity = flags.some((w) => !ADVISORY_WORDS.has(w)) ? 'critical' : 'advisory';
-    if (SENSITIVE_PATH_RE.test(text)) flags.push('references a sensitive path (.ssh/.env/credentials/…)');
-    if (SECRET_ENV_RE.test(text)) flags.push('reads a secret env var');
-    if (flags.length) findings.push({ tool: t.name, flags, severity });
+    const pathM = matchOf(SENSITIVE_PATH_RE, text);
+    if (pathM) { flags.push('references a sensitive path (.ssh/.env/credentials/…)'); hits.push({ flag: 'references a sensitive path (.ssh/.env/credentials/…)', match: pathM.match }); }
+    const secretM = matchOf(SECRET_ENV_RE, text);
+    if (secretM) { flags.push('reads a secret env var'); hits.push({ flag: 'reads a secret env var', match: secretM.match }); }
+    if (flags.length) findings.push({ tool: t.name, flags, severity, hits });
   }
   return findings;
 }
