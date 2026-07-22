@@ -30,9 +30,9 @@ test('a mixed-case identifier is not treated as an env var', () => {
   }
 });
 
-// The base64-to-shell rule is deliberately UNCHANGED by this PR: every
-// severity-downgrade heuristic tried so far was evadable (see the follow-up
-// issue). It stays unconditionally critical.
+// The rule's SEVERITY is deliberately unchanged: every downgrade heuristic tried
+// so far was evadable (#84), so it stays unconditionally critical. #88 widened
+// only which spellings it recognises — see base64-shell-spellings.test.mjs.
 test('base64 decoded into a shell remains unconditionally critical', () => {
   const DEC = 'base64 -d | ' + 'bash';
   for (const cmd of [

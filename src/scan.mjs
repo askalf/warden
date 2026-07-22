@@ -33,11 +33,30 @@ export const METADATA_RE = /\b(?:169\.254\.169\.254|2852039166|0xa9fea9fe|0251\.
 // kept in lockstep with the shell-side persistence patterns so a backdoor
 // dropped via `write` is caught the same as `echo >> ~/.bashrc`.
 export const PERSISTENCE_PATH_RE = /(authorized_keys|[\\/]etc[\\/](?:cron|systemd[\\/]system|sudoers|ld\.so\.preload|rc\.local|init\.d|profile\.d)|CurrentVersion[\\/]+Run|Image\s+File\s+Execution|[\\/]Startup[\\/]|[\\/]\.(?:bashrc|bash_profile|bash_login|zshrc|zshenv|zprofile|profile|kshrc|cshrc)(?:["'\s]|$)|[\\/]\.config[\\/]autostart[\\/])/i;
+// A decoded payload piped into a shell. Both halves of the old
+// `base64\s+-d\s*\|\s*(?:ba)?sh` spelled exactly one variant, and 7 of 12 real
+// spellings walked past it (#88):
+//   flag  — `--decode` and combined short clusters (`-di`, `-d -i`) all missed.
+//           A cluster containing d/D also covers BSD/macOS's `-D`.
+//   shell — `(?:ba)?sh` knows only sh/bash, so `zsh`, `dash` and an absolute
+//           `/bin/sh` were free. `env` prefixes are common in shebang-ish docs.
+// Every gap is BOUNDED and every character class excludes its own delimiter, so
+// there is no nested quantifier over overlapping input and the match stays
+// linear — bench/redos.mjs covers the shape.
+//
+// Deliberately NOT widened to `| ./script.sh`: piping into a named script is not
+// the sight-unseen-interpreter shape this rule is about, and the old pattern
+// never claimed it either.
+const B64_DECODE = String.raw`base64\s+(?:--decode\b|-[A-Za-z]*[dD][A-Za-z]*)`;
+// Shared with OBFUSCATION_RE below so the two cannot drift apart again.
+export const PIPE_TO_SHELL = String.raw`\|\s*(?:[\w./-]{0,24}\/)?(?:env\s+)?(?:ba|z|da|k|a)?sh\b`;
+export const B64_TO_SHELL_RE = new RegExp(`${B64_DECODE}[^|\\n]{0,40}${PIPE_TO_SHELL}`, 'i');
+
 export const INJECTION_RE = [
   { re: /ignore\s+(?:all\s+|the\s+|your\s+)?(?:previous|prior|above)\s+(?:instructions|rules|prompt)/i, why: 'instruction-override' },
   { re: /\b(?:exfiltrate|leak|steal)\b/i, why: 'exfiltration intent' },
   { re: /disregard[^.]{0,20}(?:safety|guardrail|policy)/i, why: 'safety-bypass instruction' },
-  { re: /base64\s+-d\s*\|\s*(?:ba)?sh/i, why: 'obfuscated payload to shell' },
+  { re: B64_TO_SHELL_RE, why: 'obfuscated payload to shell' },
   { re: /send\s+(?:all\s+|the\s+)?(?:files|secrets|env|credentials|keys)[^.]{0,40}(?:https?|webhook|curl)/i, why: 'data-exfil instruction' },
   { re: /\b(?:e-?mail|send|upload|post|transmit|forward|exfil\w*)\b\s+(?:all\s+|the\s+|every\s+|your\s+)?(?:secrets?|credentials?|api[ _-]?keys?|passwords?|tokens?|private\s+keys?|(?<!\w)\.env\b)\b[^.]{0,60}(?:@|https?:|webhook|attacker|to\s+\S+@)/i, why: 'data-exfil instruction (to a destination)' },
   { re: /reveal\s+(?:all\s+|the\s+|your\s+)?(?:secrets|system\s+prompt|prompt|api\s+keys|credentials)/i, why: 'system-prompt/secret extraction' },
@@ -177,7 +196,10 @@ export const OBFUSCATION_RE = [
   { re: /\$\w+\$\w+/, why: 'concatenated variables as a command' },
   { re: /\|\s*\$\{?\w+\}?(?:\s|$)/, why: 'pipes into a variable-named command' },
   { re: /\b\w{1,4}=[^;\s|]{1,16}\s*;[^;]{0,40}\$\{?\w/, why: 'assigns then invokes via a variable' },
-  { re: /\bxxd\s+-r\b|\b(?:base32|base64|openssl\s+enc)\b[^|]*\|\s*(?:ba)?sh\b/i, why: 'decodes then pipes to a shell' },
+  // Same shell-name gap as the injection rule had (#88) — `| zsh` / `| dash` /
+  // `| /bin/sh` raised no smell either. Shares PIPE_TO_SHELL so a future shell
+  // can only be added in one place.
+  { re: new RegExp(String.raw`\bxxd\s+-r\b|\b(?:base32|base64|openssl\s+enc)\b[^|]*${PIPE_TO_SHELL}`, 'i'), why: 'decodes then pipes to a shell' },
   { re: /\beval\b/i, why: 'eval of dynamic content' },
   { re: /(?:\\x[0-9a-f]{2}){2,}/i, why: 'hex-escaped payload' },
   { re: /\bprintf\b[^|;&\n]*(?:\\x[0-9a-f]{2}|\\[0-7]{3})/i, why: 'printf hex/octal building a command' },
