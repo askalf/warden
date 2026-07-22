@@ -13,18 +13,17 @@ const HOME = process.env.USERPROFILE || process.env.HOME || os.homedir();
 const BASE_EGRESS = ['api.anthropic.com', 'registry.npmjs.org'];
 
 // A GLOBAL policy governs projects that have nothing to do with the directory
-// `init --global` happened to run in, so it cannot inherit that directory's git
-// remotes -- run it anywhere without a .git and github.com is missing, after
-// which ordinary `git`/`gh`/`curl` traffic reads as external and (once anything
-// sensitive is touched) classifies BLACK. These are the hosts a coding agent
-// talks to on essentially every machine.
-const GLOBAL_DEV_EGRESS = [
-  'github.com',
-  'api.github.com',
-  'raw.githubusercontent.com',
-  'codeload.github.com',
-  'objects.githubusercontent.com',
-];
+// `init --global` happened to run in, so it must not inherit that directory's
+// git remotes or its layout.
+//
+// NOTE: it deliberately does NOT seed github.com either. Allowlisting a host
+// suppresses the BLACK secret-exfil verdict for that host (decide() only raises
+// BLACK when a secret meets an EXTERNAL host), and GitHub issues/gists/comments
+// accept arbitrary attacker-readable content -- so trusting them would turn a
+// stolen-token drop into a silently-deferred RED. Routine read traffic is
+// already green without the allowlist; only a session already tainted by a
+// secret is affected, which is exactly the case that should be scrutinised.
+// See #81 for making GitHub ergonomic without reopening that hole.
 
 /** Build an init policy. Per-PROJECT (default) derives egress + write roots from
  *  `cwd`, which is correct: that policy governs that project. GLOBAL derives
@@ -35,8 +34,7 @@ export function buildInitPolicy(cwd = process.cwd(), { global: isGlobal = false 
   const egress = new Set(BASE_EGRESS);
 
   if (isGlobal) {
-    for (const h of GLOBAL_DEV_EGRESS) egress.add(h);
-    // writeRoots intentionally null: see above.
+    // No CWD-derived remotes, no CWD-derived writeRoots, no blanket host trust.
     return { strict: false, deny: ['shell(sudo*)'], egressAllow: [...egress], writeRoots: null };
   }
 
