@@ -165,14 +165,24 @@ export function scanMcpTools(tools = []) {
     // hits: the same flags with the substring each matched, for evidence surfacing.
     // Kept strictly parallel to `flags` (same order, same conditions) so the flag
     // output is byte-for-byte unchanged; `hits` is purely additive.
-    const hits = injectionHitsDetailed(text).map((h) => ({ flag: h.flag, match: h.match }));
+    //
+    // `start`/`end` are the match's offsets INTO `text` above -- i.e. into the
+    // stringified-and-newline-normalized view, NOT into the caller's raw source.
+    // A consumer that wants a source position must reverse that transform; using
+    // these offsets against raw bytes would silently point at the wrong place.
+    // They are carried because re-finding a match by SEARCHING for its text is
+    // ambiguous (a short match like a bare path token recurs many times in one
+    // document) and fails outright when a match window slices a JSON escape.
+    // matchOf/injectionHitsDetailed have always computed them; they were simply
+    // dropped here. See truecopy#99.
+    const hits = injectionHitsDetailed(text).map((h) => ({ flag: h.flag, match: h.match, start: h.start, end: h.end }));
     const exfilM = matchOf(SENSITIVE_PATH_EXFIL_RE, text);
-    if (exfilM) { flags.push('sensitive-path exfil instruction (path → destination)'); hits.push({ flag: 'sensitive-path exfil instruction (path → destination)', match: exfilM.match }); }
+    if (exfilM) { flags.push('sensitive-path exfil instruction (path → destination)'); hits.push({ flag: 'sensitive-path exfil instruction (path → destination)', match: exfilM.match, start: exfilM.start, end: exfilM.end }); }
     let severity = flags.some((w) => !ADVISORY_WORDS.has(w)) ? 'critical' : 'advisory';
     const pathM = matchOf(SENSITIVE_PATH_RE, text);
-    if (pathM) { flags.push('references a sensitive path (.ssh/.env/credentials/…)'); hits.push({ flag: 'references a sensitive path (.ssh/.env/credentials/…)', match: pathM.match }); }
+    if (pathM) { flags.push('references a sensitive path (.ssh/.env/credentials/…)'); hits.push({ flag: 'references a sensitive path (.ssh/.env/credentials/…)', match: pathM.match, start: pathM.start, end: pathM.end }); }
     const secretM = matchOf(SECRET_ENV_RE, text);
-    if (secretM) { flags.push('reads a secret env var'); hits.push({ flag: 'reads a secret env var', match: secretM.match }); }
+    if (secretM) { flags.push('reads a secret env var'); hits.push({ flag: 'reads a secret env var', match: secretM.match, start: secretM.start, end: secretM.end }); }
     if (flags.length) findings.push({ tool: t.name, flags, severity, hits });
   }
   return findings;
