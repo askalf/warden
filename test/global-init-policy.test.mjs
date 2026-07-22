@@ -6,6 +6,12 @@ import path from 'node:path';
 import { buildInitPolicy } from '../src/cli.mjs';
 import { check, TIER } from '../src/index.mjs';
 
+// NOTE: host membership is asserted with `.some((x) => x === host)` rather than
+// `.includes(host)`. egressAllow is an array of exact hostnames, but CodeQL's
+// js/incomplete-url-substring-sanitization heuristic reads `.includes('github.com')`
+// as a URL substring check and raises a high alert. Explicit equality says what we
+// mean and doesn't trip it.
+//
 // Regression cover for #81: `init --global` derived BOTH egressAllow and
 // writeRoots from the current working directory. A machine-wide policy has no
 // relationship to whatever directory it was created in.
@@ -35,7 +41,7 @@ test('global policy does NOT allowlist GitHub — that would suppress exfil dete
   // silently-deferred RED under the global policy's strict:false.
   const g = buildInitPolicy(bare, { global: true });
   for (const h of ['github.com', 'api.github.com', 'gist.github.com', 'raw.githubusercontent.com']) {
-    assert.equal(g.egressAllow.includes(h), false, `${h} must NOT be globally allowlisted`);
+    assert.equal(g.egressAllow.some((x) => x === h), false, `${h} must NOT be globally allowlisted`);
   }
 });
 
@@ -60,7 +66,7 @@ test('global policy does NOT inherit the CWD write roots', () => {
 
 test('global policy does NOT inherit the CWD git remote', () => {
   const g = buildInitPolicy(odd, { global: true });
-  assert.equal(g.egressAllow.includes('git.internal.example'), false,
+  assert.equal(g.egressAllow.some((x) => x === 'git.internal.example'), false,
     'one project\'s private remote must not become a machine-wide allowlist entry');
 });
 
@@ -68,9 +74,9 @@ test('global policy does NOT inherit the CWD git remote', () => {
 
 test('project policy still derives egress and roots from its own directory', () => {
   const p = buildInitPolicy(odd);
-  assert.ok(p.egressAllow.includes('git.internal.example'), 'project policy should learn its own remote');
+  assert.ok(p.egressAllow.some((x) => x === 'git.internal.example'), 'project policy should learn its own remote');
   assert.deepEqual(p.writeRoots, ['src/', 'docs/']);
-  assert.equal(p.egressAllow.includes('github.com'), false,
+  assert.equal(p.egressAllow.some((x) => x === 'github.com'), false,
     'project policy should NOT be widened with global dev hosts');
 });
 
