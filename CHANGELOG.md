@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`obfuscated payload to shell` recognised one spelling out of twelve** (#88).
+  Both halves of the pattern were too narrow: the decode flag matched only `-d`
+  (so `--decode`, `-di` and `-d -i` evaded it) and the shell name matched only
+  `sh`/`bash` (so `zsh`, `dash`, `/bin/sh` and `env bash` evaded it) — **7 of 12
+  real spellings walked past**. This reached the runtime, not just the poison
+  scan: `injectionHits` backs `scanToolResult`, so `guardHandler` forwarded a
+  long-form dropper in a tool result to the agent verbatim while neutralising the
+  short form. Same class as #41/#45. The live shell firewall was never affected —
+  `decide()` returned `black` for every spelling.
+
+  The sibling `decodes then pipes to a shell` obfuscation smell had the identical
+  shell-name gap and is fixed with it; both now share `PIPE_TO_SHELL` so they
+  cannot drift apart again.
+
+  Detection **widening** is the risk direction that creates false positives, so
+  it was measured rather than reasoned about: re-scanning the full official
+  plugin directory (**272 plugins / 1850 skills**) before and after produced a
+  **zero delta** — no skill changed verdict or flags. `bench/redos.mjs` worst
+  case 0.47 ms across 144 patterns; every gap in the new pattern is bounded and
+  every character class excludes its own delimiter.
+
 ## [0.6.0] - 2026-07-21
 
 ### Added
