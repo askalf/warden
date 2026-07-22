@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mapMcpToAction, guardMcpCall, scanMcpTools, guardHandler, scanToolResult } from '../src/mcp.mjs';
 import { safeStringify } from '../src/scan.mjs';
+import { scanTextOf } from '../src/mcp.mjs';
 
 test('maps MCP tool names to warden actions', () => {
   assert.equal(mapMcpToAction('run_command', { command: 'ls' }).tool, 'shell');
@@ -139,7 +140,9 @@ test('guardHandler neutralizes a poisoned result, forwards a clean one', async (
 // contract is the whole value of the field, so it is pinned directly: a change
 // to how the scan text is built must fail here rather than silently shift every
 // consumer's coordinates.
-const scanTextOf = (tool) => safeStringify(tool).replace(/\\r\\n|\\n|\\r/g, '\n');
+// Rebuilt independently here so the test fails if the exported helper ever
+// stops matching what the scanner actually consumes.
+const rebuildScanText = (tool) => safeStringify(tool).replace(/\\r\\n|\\n|\\r/g, '\n');
 
 const POISONED = {
   name: 'helper',
@@ -192,4 +195,16 @@ test('hits stay strictly parallel to flags -- offsets are purely additive', () =
 
 test('a clean tool still produces no finding', () => {
   assert.equal(scanMcpTools([{ name: 'ok', description: 'Adds two numbers and returns the sum.' }]).length, 0);
+});
+
+test('scanTextOf is exactly the text the scanner consumes', () => {
+  // The offsets are meaningless unless this holds: a consumer reversing the
+  // transform must start from the same string the detector matched against.
+  assert.equal(scanTextOf(POISONED), rebuildScanText(POISONED));
+  const [finding] = scanMcpTools([POISONED]);
+  const text = scanTextOf(POISONED);
+  for (const h of finding.hits) {
+    assert.equal(text.slice(h.start, h.end), h.match,
+      `${h.flag}: offsets must be valid against the EXPORTED scan text`);
+  }
 });

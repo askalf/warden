@@ -147,6 +147,22 @@ export function guardHandler(handler, policy, opts = {}) {
  *    Existing consumers that only read `flags` are unaffected.
  */
 const ADVISORY_WORDS = new Set(['exfiltration intent']);
+/** The exact text `scanMcpTools` scans for a given tool object.
+ *
+ *  Exported because hit `start`/`end` are offsets into THIS string, and a
+ *  consumer that wants a source position has to reverse the transform. Without
+ *  it a consumer must re-implement the line below, and -- worse -- has no way to
+ *  obtain this string to TEST that its reconstruction still agrees. Drift would
+ *  then be silent, and silently-wrong source citations are precisely what the
+ *  offsets exist to prevent. One definition, used internally and published.
+ *
+ *  The newline normalization is load-bearing, not cosmetic: in a JSON string a
+ *  real newline arrives as the two-char sequence `\n`, which is neither `.` nor
+ *  `\n` to a regex, so clause-bounded patterns would silently span lines and
+ *  unrelated rows of a table could read as one verb -> path -> destination.
+ */
+export const scanTextOf = (tool) => safeStringify(tool).replace(/\\r\\n|\\n|\\r/g, '\n');
+
 export function scanMcpTools(tools = []) {
   const findings = [];
   if (!Array.isArray(tools)) return findings;           // fail-safe: a non-array tool list isn't scannable
@@ -160,7 +176,7 @@ export function scanMcpTools(tools = []) {
     // JSON string every real newline is the 2-char `\n`, which is neither `.` nor
     // `\n` to a regex — clause-bounded patterns would silently span lines, and
     // unrelated rows of a table can read as one verb→path→destination "clause".
-    const text = safeStringify(t).replace(/\\r\\n|\\n|\\r/g, '\n');
+    const text = scanTextOf(t);
     const flags = injectionHits(text); // NOT scanInjection — that would re-stringify and re-escape the newlines just normalized
     // hits: the same flags with the substring each matched, for evidence surfacing.
     // Kept strictly parallel to `flags` (same order, same conditions) so the flag
