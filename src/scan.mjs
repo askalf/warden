@@ -25,7 +25,16 @@ export const SECRET_ENV_RE = /\$\{?[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDEN
 // `.env` needs the lookbehind: `process.env` / `self.env` / `import.meta.env`
 // are ordinary CODE, not the dotenv FILE — scanning real marketplace skills,
 // bare `\.env\b` was the single largest false-positive source.
-export const SENSITIVE_PATH_RE = /((?<!\w)\.env\b|\.aws[\\/]|\.ssh[\\/]|\.gnupg[\\/]|secring\.gpg\b|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/]|[\\/](?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker[\\/]config\.json|\.netrc\b|[\\/]gh[\\/]hosts\.yml|[\\/]gcloud[\\/]|[\\/]\.azure[\\/]|serviceaccount[\\/]token|\.pgpass\b|rclone\.conf|credentials\.tfrc|[\\/]etc[\\/]shadow\b)/i;
+// Each `[\\/]` separator carries a `(?!")` guard: the scan text is a
+// JSON-stringified view (scanTextOf in mcp.mjs) that un-escapes only newlines,
+// so a source `"` survives as the two chars backslash-quote. A quoted
+// token — `--cluster_endpoint "host.on.aws" now` becomes `...on.aws" now` —
+// then lets the separator class match that escape backslash, flagging every
+// quoted hostname or list literal in documentation prose (redstamp#86). `(?!")`
+// refuses a separator immediately followed by `"`; a REAL path separator is
+// never the char before a closing quote, and JSON doubles a genuine backslash
+// to `\\`, so no true positive (incl. Windows `.aws\config`, a trailing-slash dir) is lost.
+export const SENSITIVE_PATH_RE = /((?<!\w)\.env\b|\.aws[\\/](?!")|\.ssh[\\/](?!")|\.gnupg[\\/](?!")|secring\.gpg\b|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/](?!")config|[\\/](?!")\.claude[\\/](?!")|[\\/](?!")\.askalf[\\/](?!")|[\\/](?!")(?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker[\\/](?!")config\.json|\.netrc\b|[\\/](?!")gh[\\/](?!")hosts\.yml|[\\/](?!")gcloud[\\/](?!")|[\\/](?!")\.azure[\\/](?!")|serviceaccount[\\/](?!")token|\.pgpass\b|rclone\.conf|credentials\.tfrc|[\\/](?!")etc[\\/](?!")shadow\b)/i;
 // Cloud-instance-metadata hosts, incl. the common numeric encodings of the AWS
 // IMDS IP (169.254.169.254 → decimal/hex/octal) used to evade literal matching.
 export const METADATA_RE = /\b(?:169\.254\.169\.254|2852039166|0xa9fea9fe|0251\.0376\.0251\.0376|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200)\b|\[?(?:fd00:ec2::254|::ffff:a9fe:a9fe)\]?/i;
