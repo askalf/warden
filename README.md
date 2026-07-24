@@ -73,10 +73,12 @@ Firewall an MCP server's tool-calls, and scan its advertised tools for poisoning
 import { guardHandler, scanMcpTools } from '@askalf/redstamp/mcp';
 
 // 1) supply-chain: catch malicious instructions hidden in tool descriptions
-const findings = scanMcpTools(server.tools); // [{ tool, flags, severity }]
+const findings = scanMcpTools(server.tools); // [{ tool, flags, severity, hits }]
 // severity: 'critical' = injection/exfil *instructions*; 'advisory' = a bare
 // sensitive-path / secret-env *mention* — so prose that documents credential
 // handling doesn't read as poison when you scan long-form skill text.
+// hits: [{ flag, match, start, end }] — the exact matched span behind each flag,
+// same order and conditions as `flags`, for checking a finding against source bytes.
 
 // 2) wrap the tools/call handler — every call is firewalled before it runs
 server.setHandler(guardHandler(realHandler, policy, {
